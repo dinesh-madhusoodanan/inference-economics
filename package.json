@@ -1,0 +1,13 @@
+{
+  "name": "inference-economics",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "InferenceEconomics site with a scheduled poller that syncs an upstream source git repo.",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^3.0.0"
+  }
+}
