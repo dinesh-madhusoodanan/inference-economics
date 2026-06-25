@@ -1,549 +1,809 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>InferenceEconomics — The price of intelligence, tracked</title>
-<meta name="description" content="Independent research on the cost, pricing, and supply of AI inference. The dollars behind every token.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>InferenceEconomics — Storage costs & model right-sizing</title>
+<meta name="description" content="The storage layer behind inference, and whether a cheaper model can serve most of your prompts." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Inter:wght@400;450;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
+  /* ============================================================
+     DESIGN TOKENS  — matched to the InferenceEconomics site:
+     editorial / financial-research, ink on warm paper, hairline
+     rules, mono utility labels, a single deep-petrol accent.
+     ============================================================ */
   :root{
-    --bg:#0A1315;
-    --bg-grid:rgba(150,180,180,.035);
-    --panel:#0F1D20;
-    --panel-2:#0C181A;
-    --line:rgba(150,180,180,.13);
-    --line-strong:rgba(150,180,180,.26);
-    --ink:#EAF0EE;
-    --ink-dim:#A6BAB8;
-    --mute:#62807F;
-    --amber:#F2A93C;
-    --amber-dim:rgba(242,169,60,.14);
-    --amber-line:rgba(242,169,60,.4);
-    --max:1180px;
-    --r:14px;
+    --paper:#F6F4EF;
+    --surface:#FCFBF8;
+    --ink:#17150F;
+    --muted:#6E6A60;
+    --faint:#9A958B;
+    --rule:#E5E1D7;
+    --rule-2:#D8D3C7;
+    --accent:#0E5A66;        /* deep petrol — links, CTA, highlight */
+    --accent-ink:#0A434C;
+    --pos:#2E7D52;           /* cost falling / savings = good       */
+    --neg:#B23A3A;           /* cost rising / over-spend            */
+    --pos-bg:#E7F1EA;
+    --neg-bg:#F6E7E5;
+    --shadow:0 1px 2px rgba(23,21,15,.04), 0 8px 24px -16px rgba(23,21,15,.18);
+    --serif:'Newsreader', Georgia, 'Times New Roman', serif;
+    --sans:'Inter', system-ui, -apple-system, sans-serif;
+    --mono:'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+    --maxw:1180px;
   }
 
-  *{box-sizing:border-box;margin:0;padding:0}
+  *,*::before,*::after{box-sizing:border-box}
   html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
   body{
-    background:var(--bg);
-    color:var(--ink);
-    font-family:"IBM Plex Sans",system-ui,sans-serif;
-    font-size:17px;line-height:1.6;
-    -webkit-font-smoothing:antialiased;
-    background-image:
-      linear-gradient(var(--bg-grid) 1px,transparent 1px),
-      linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);
-    background-size:46px 46px;
-    overflow-x:hidden;
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.55;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
   }
-  a{color:inherit;text-decoration:none}
-  ::selection{background:var(--amber);color:#0A1315}
+  a{color:inherit; text-decoration:none}
+  ::selection{background:var(--accent); color:var(--paper)}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:2px}
 
-  .wrap{max-width:var(--max);margin:0 auto;padding:0 28px}
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 28px}
+  .mono{font-family:var(--mono)}
+  .tnum{font-variant-numeric:tabular-nums}
 
-  /* ---------- type helpers ---------- */
-  .serif{font-family:"Instrument Serif",Georgia,serif;font-weight:400;letter-spacing:.4px}
-  .mono{font-family:"IBM Plex Mono",monospace}
-  .eyebrow{
-    font-family:"IBM Plex Mono",monospace;
-    font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;
-    color:var(--mute);
+  /* ---------- header ---------- */
+  .site-head{
+    position:sticky; top:0; z-index:50;
+    background:color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter:saturate(1.2) blur(8px);
+    border-bottom:1px solid var(--rule);
   }
-  .eyebrow b{color:var(--amber);font-weight:500}
-
-  /* ---------- nav ---------- */
-  header.nav{
-    position:sticky;top:0;z-index:50;
-    backdrop-filter:blur(10px);
-    background:rgba(10,19,21,.72);
-    border-bottom:1px solid var(--line);
-  }
-  .nav-in{display:flex;align-items:center;justify-content:space-between;height:66px}
-  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:1.02rem;letter-spacing:-.01em}
-  .brand .tick{width:11px;height:18px;background:var(--amber);display:inline-block;box-shadow:0 0 14px rgba(242,169,60,.6)}
-  .brand em{color:var(--amber);font-style:normal}
-  .nav-links{display:flex;align-items:center;gap:30px}
-  .nav-links a.lnk{font-family:"IBM Plex Mono",monospace;font-size:.78rem;letter-spacing:.06em;color:var(--ink-dim);transition:color .2s}
-  .nav-links a.lnk:hover{color:var(--ink)}
+  .site-head__inner{display:flex; align-items:center; gap:32px; height:64px}
+  .brand{font-family:var(--serif); font-size:21px; letter-spacing:-.01em; white-space:nowrap}
+  .brand i{font-style:italic}
+  .brand .dot{color:var(--accent)}
+  .nav{display:flex; gap:26px; margin-left:auto; font-size:13px;
+       font-family:var(--mono); letter-spacing:.04em; color:var(--muted)}
+  .nav a{padding:4px 0; border-bottom:1px solid transparent; transition:color .18s, border-color .18s}
+  .nav a:hover{color:var(--ink); border-color:var(--rule-2)}
   .btn{
-    font-family:"IBM Plex Mono",monospace;font-size:.78rem;letter-spacing:.04em;
-    padding:9px 16px;border-radius:8px;border:1px solid var(--amber-line);
-    color:var(--amber);background:var(--amber-dim);transition:all .2s;cursor:pointer;
+    font-family:var(--mono); font-size:13px; letter-spacing:.03em;
+    background:var(--accent); color:var(--paper); padding:9px 16px; border-radius:3px;
+    border:1px solid var(--accent); cursor:pointer; transition:background .18s, transform .05s;
   }
-  .btn:hover{background:var(--amber);color:#0A1315;border-color:var(--amber)}
-  .btn-solid{background:var(--amber);color:#0A1315;border-color:var(--amber)}
-  .btn-solid:hover{filter:brightness(1.08)}
-  .btn-ghost{border-color:var(--line-strong);color:var(--ink-dim);background:transparent}
-  .btn-ghost:hover{border-color:var(--ink-dim);color:var(--ink);background:transparent}
-  .nav-burger{display:none}
+  .btn:hover{background:var(--accent-ink)}
+  .btn:active{transform:translateY(1px)}
+  @media (max-width:820px){ .nav{display:none} }
 
-  /* ---------- hero ---------- */
-  .hero{padding:74px 0 54px;position:relative}
-  .hero-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:54px;align-items:center}
-  .hero h1{
-    font-family:"Instrument Serif",Georgia,serif;font-weight:400;
-    font-size:clamp(3rem,6.4vw,5.4rem);line-height:.98;letter-spacing:.5px;
-    margin:20px 0 22px;
+  /* ---------- section scaffold ---------- */
+  .section{padding:96px 0; border-top:1px solid var(--rule)}
+  .section:first-of-type{border-top:none}
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 18px
   }
-  .hero h1 i{font-style:italic;color:var(--amber)}
-  .hero p.lede{font-size:1.12rem;color:var(--ink-dim);max-width:34em;margin-bottom:30px}
-  .hero-cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-  .btn-lg{padding:13px 22px;font-size:.82rem;border-radius:10px}
-  .hero-foot{margin-top:30px;display:flex;gap:26px;flex-wrap:wrap;color:var(--mute);font-family:"IBM Plex Mono",monospace;font-size:.74rem;letter-spacing:.04em}
-  .hero-foot span b{color:var(--ink-dim);font-weight:500}
-
-  /* ---------- chart panel ---------- */
-  .chart-card{
-    background:radial-gradient(120% 90% at 78% 18%,rgba(242,169,60,.10),transparent 60%),var(--panel);
-    border:1px solid var(--line);border-radius:var(--r);
-    padding:22px 20px 14px;position:relative;overflow:hidden;
+  .h-sec{
+    font-family:var(--serif); font-weight:500; letter-spacing:-.02em;
+    font-size:clamp(30px,4.4vw,46px); line-height:1.06; margin:0 0 18px; max-width:18ch
   }
-  .chart-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:12px}
-  .chart-head .ttl{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.13em;color:var(--ink-dim);text-transform:uppercase}
-  .chart-head .sub{font-family:"IBM Plex Mono",monospace;font-size:.64rem;color:var(--mute);letter-spacing:.06em;margin-top:4px}
-  .chart-badge{font-family:"IBM Plex Mono",monospace;font-size:.66rem;color:var(--amber);border:1px solid var(--amber-line);border-radius:6px;padding:3px 8px;white-space:nowrap}
-  svg.chart{width:100%;height:auto;display:block}
-  .gridline{stroke:var(--line);stroke-width:1}
-  .axis-label{fill:var(--mute);font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.04em}
-  #costLine{fill:none;stroke:var(--amber);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;filter:url(#glow)}
-  .dot{fill:var(--bg);stroke:var(--amber);stroke-width:2}
-  .nowline{stroke:var(--amber-line);stroke-width:1;stroke-dasharray:3 4}
+  .h-sec em{font-style:italic; color:var(--accent)}
+  .lead{font-size:18px; color:var(--muted); max-width:62ch; margin:0}
+  .lead b{color:var(--ink); font-weight:600}
 
-  /* ---------- ticker ---------- */
-  .ticker{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel-2);overflow:hidden;white-space:nowrap;position:relative}
-  .ticker::before,.ticker::after{content:"";position:absolute;top:0;bottom:0;width:70px;z-index:2;pointer-events:none}
-  .ticker::before{left:0;background:linear-gradient(90deg,var(--panel-2),transparent)}
-  .ticker::after{right:0;background:linear-gradient(270deg,var(--panel-2),transparent)}
-  .ticker-track{display:inline-flex;gap:0;animation:scroll 42s linear infinite}
-  .tick-item{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;font-family:"IBM Plex Mono",monospace;font-size:.78rem;letter-spacing:.04em;border-right:1px solid var(--line)}
-  .tick-item .sym{color:var(--ink-dim)}
-  .tick-item .px{color:var(--ink)}
-  .tick-item .dn{color:var(--amber)}
-  @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .reveal{opacity:0; transform:translateY(16px); transition:opacity .7s ease, transform .7s ease}
+  .reveal.in{opacity:1; transform:none}
+  @media (prefers-reduced-motion:reduce){ .reveal{opacity:1; transform:none; transition:none} }
 
-  /* ---------- generic section ---------- */
-  .sec{padding:84px 0}
-  .sec-head{max-width:38em;margin-bottom:46px}
-  .sec-head h2{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:clamp(2rem,4vw,3rem);line-height:1.05;letter-spacing:.4px;margin:14px 0 0}
-  .note{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--mute);letter-spacing:.04em;margin-top:30px}
+  /* ============================================================
+     STORAGE SECTION
+     ============================================================ */
+  .cards{display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+         background:var(--rule); border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-top:48px}
+  .card{background:var(--surface); padding:24px 22px}
+  .card__k{font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;
+           text-transform:uppercase; color:var(--muted); margin:0 0 14px}
+  .card__v{font-family:var(--serif); font-size:38px; line-height:1; letter-spacing:-.02em; margin:0}
+  .card__v .u{font-size:15px; color:var(--faint); font-family:var(--mono); letter-spacing:0; margin-left:3px}
+  .delta{display:inline-flex; align-items:center; gap:5px; margin-top:12px;
+         font-family:var(--mono); font-size:12px; letter-spacing:.02em}
+  .delta--pos{color:var(--pos)} .delta--neg{color:var(--neg)} .delta--mut{color:var(--faint)}
+  @media (max-width:900px){ .cards{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:520px){ .cards{grid-template-columns:1fr} }
 
-  /* ---------- snapshot ---------- */
-  .snapshot{border-top:1px solid var(--line)}
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
-  .stat{background:var(--panel);padding:26px 24px}
-  .stat .lab{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
-  .stat .val{font-family:"IBM Plex Mono",monospace;font-size:2.3rem;font-weight:500;color:var(--ink);margin:14px 0 6px;letter-spacing:-.01em}
-  .stat .delta{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--amber);letter-spacing:.03em}
-  .stat .delta.flat{color:var(--ink-dim)}
+  .split{display:grid; grid-template-columns:1fr 1fr; gap:1px;
+         background:var(--rule); border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-top:1px}
+  .split__col{background:var(--surface); padding:30px 26px}
+  .split__h{font-family:var(--serif); font-size:21px; margin:0 0 4px; letter-spacing:-.01em}
+  .split__tag{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin:0 0 14px}
+  .split__p{font-size:14.5px; color:var(--muted); margin:0 0 16px}
+  .ll{list-style:none; margin:0; padding:0; font-size:14px}
+  .ll li{display:flex; justify-content:space-between; gap:18px; padding:9px 0; border-top:1px dotted var(--rule-2)}
+  .ll li:first-child{border-top:none}
+  .ll .term{color:var(--ink)}
+  .ll .term small{display:block; color:var(--faint); font-size:12px; font-family:var(--mono)}
+  .ll .num{font-family:var(--mono); color:var(--muted); white-space:nowrap}
+  @media (max-width:760px){ .split{grid-template-columns:1fr} }
 
-  /* ---------- coverage ---------- */
-  .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
-  .card{
-    background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
-    padding:28px 26px;transition:border-color .25s,transform .25s;
+  /* shared interactive panel chrome */
+  .panel{background:var(--surface); border:1px solid var(--rule); border-radius:8px; box-shadow:var(--shadow)}
+  .panel__bar{display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+              padding:16px 22px; border-bottom:1px solid var(--rule)}
+  .panel__title{font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+  .panel__note{font-family:var(--mono); font-size:11px; color:var(--faint)}
+
+  .estimator{display:grid; grid-template-columns:1.05fr .95fr; gap:0; margin-top:40px}
+  .estimator .panel__bar{grid-column:1 / -1}
+  .est-controls{padding:26px 24px; border-right:1px solid var(--rule)}
+  .est-out{padding:26px 24px; display:flex; flex-direction:column}
+  @media (max-width:760px){
+    .estimator{grid-template-columns:1fr}
+    .est-controls{border-right:none; border-bottom:1px solid var(--rule)}
   }
-  .card:hover{border-color:var(--line-strong);transform:translateY(-3px)}
-  .card .ix{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.12em;color:var(--amber)}
-  .card h3{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:1.7rem;margin:14px 0 10px;letter-spacing:.3px}
-  .card p{color:var(--ink-dim);font-size:.98rem}
 
-  /* ---------- briefings ---------- */
-  .briefings{border-top:1px solid var(--line)}
-  .posts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-  .post{
-    background:linear-gradient(180deg,var(--panel),var(--panel-2));
-    border:1px solid var(--line);border-radius:var(--r);padding:26px 24px;
-    display:flex;flex-direction:column;min-height:260px;transition:border-color .25s}
-  .post:hover{border-color:var(--amber-line)}
-  .post .kick{font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.1em;color:var(--mute);text-transform:uppercase}
-  .post .kick b{color:var(--amber);font-weight:500}
-  .post h3{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:1.55rem;line-height:1.1;margin:16px 0 12px;letter-spacing:.3px}
-  .post p{color:var(--ink-dim);font-size:.94rem;flex:1}
-  .post .read{font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--amber);margin-top:18px;letter-spacing:.03em}
+  .field{margin-bottom:20px}
+  .field:last-child{margin-bottom:0}
+  .field__top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:9px}
+  .field__lab{font-size:13.5px; font-weight:500}
+  .field__lab small{color:var(--faint); font-weight:400; font-family:var(--mono); font-size:11px; margin-left:6px}
+  .field__val{font-family:var(--mono); font-size:13px; color:var(--accent)}
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+    background:linear-gradient(var(--accent),var(--accent)) no-repeat, var(--rule-2);
+    background-size:var(--fill,50%) 100%; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+    background:var(--surface); border:2px solid var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.18); margin-top:0;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px; height:14px; border-radius:50%; background:var(--surface);
+    border:2px solid var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.18)
+  }
+  input[type=range]::-moz-range-track{height:3px; background:var(--rule-2); border-radius:3px}
 
-  /* ---------- subscribe ---------- */
-  .subscribe{border-top:1px solid var(--line)}
-  .sub-box{
-    background:radial-gradient(90% 140% at 12% 0%,rgba(242,169,60,.08),transparent 55%),var(--panel);
-    border:1px solid var(--line);border-radius:var(--r);
-    padding:54px clamp(28px,5vw,64px);text-align:center;
+  /* stacked storage bar */
+  .stackbar{display:flex; height:34px; border-radius:5px; overflow:hidden; border:1px solid var(--rule); margin:8px 0 14px}
+  .stackbar .seg{height:100%; transition:width .45s ease}
+  .seg--model{background:var(--accent)}
+  .seg--data{background:#7FA9A0}
+  .seg--vector{background:#C8A24B}
+  .legend{display:flex; flex-wrap:wrap; gap:16px 22px; font-family:var(--mono); font-size:12px; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:7px}
+  .swatch{width:11px; height:11px; border-radius:2px; display:inline-block}
+  .est-total{margin-top:auto; padding-top:18px; border-top:1px solid var(--rule);
+             display:flex; align-items:baseline; justify-content:space-between}
+  .est-total .lbl{font-family:var(--mono); font-size:12px; letter-spacing:.04em; color:var(--muted); text-transform:uppercase}
+  .est-total .amt{font-family:var(--serif); font-size:34px; letter-spacing:-.02em}
+
+  /* ============================================================
+     RIGHT-SIZE SECTION
+     ============================================================ */
+  .sizer{display:grid; grid-template-columns:.92fr 1.08fr; gap:0; margin-top:44px}
+  .sizer .panel__bar{grid-column:1 / -1}
+  .sz-controls{padding:28px 26px; border-right:1px solid var(--rule)}
+  .sz-results{padding:28px 26px; background:linear-gradient(180deg, color-mix(in srgb,var(--accent) 4%,var(--surface)), var(--surface))}
+  @media (max-width:860px){
+    .sizer{grid-template-columns:1fr}
+    .sz-controls{border-right:none; border-bottom:1px solid var(--rule)}
   }
-  .sub-box h2{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:clamp(2.2rem,4.4vw,3.2rem);letter-spacing:.4px;line-height:1.04}
-  .sub-box p{color:var(--ink-dim);max-width:30em;margin:16px auto 30px}
-  .form{display:flex;gap:10px;max-width:440px;margin:0 auto;flex-wrap:wrap;justify-content:center}
-  .form input{
-    flex:1;min-width:220px;background:var(--bg);border:1px solid var(--line-strong);
-    border-radius:10px;padding:13px 16px;color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:.85rem;
+
+  .seg-group{display:flex; flex-wrap:wrap; gap:6px}
+  .seg-btn{
+    font-family:var(--mono); font-size:12px; letter-spacing:.02em; color:var(--muted);
+    background:var(--paper); border:1px solid var(--rule-2); border-radius:4px;
+    padding:7px 11px; cursor:pointer; transition:all .15s
   }
-  .form input::placeholder{color:var(--mute)}
-  .form input:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-dim)}
-  .form .btn{padding:13px 22px}
-  .form-msg{margin-top:18px;font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--amber);min-height:1em}
+  .seg-btn:hover{border-color:var(--accent); color:var(--ink)}
+  .seg-btn[aria-pressed=true]{background:var(--accent); color:var(--paper); border-color:var(--accent)}
+
+  .mix-row{display:grid; grid-template-columns:118px 1fr 46px; align-items:center; gap:12px; margin-bottom:14px}
+  .mix-row__lab{font-size:13.5px; font-weight:500}
+  .mix-row__lab small{display:block; color:var(--faint); font-family:var(--mono); font-size:10.5px; line-height:1.3; font-weight:400}
+  .mix-row__pct{font-family:var(--mono); font-size:13px; color:var(--accent); text-align:right}
+
+  .verdict{
+    border:1px solid var(--rule); border-left:3px solid var(--pos);
+    background:var(--pos-bg); border-radius:6px; padding:18px 20px; margin-bottom:22px
+  }
+  .verdict.is-over{border-left-color:var(--neg); background:var(--neg-bg)}
+  .verdict__tag{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--pos); margin:0 0 6px}
+  .verdict.is-over .verdict__tag{color:var(--neg)}
+  .verdict__txt{font-size:15.5px; margin:0; line-height:1.5}
+  .verdict__txt b{font-weight:600}
+
+  .res-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-bottom:22px}
+  .res{background:var(--surface); padding:18px 16px}
+  .res__k{font-family:var(--mono); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
+  .res__v{font-family:var(--serif); font-size:28px; letter-spacing:-.02em; line-height:1; margin:0}
+  .res--save{background:var(--pos-bg)}
+  .res--save .res__v{color:var(--pos)}
+  @media (max-width:520px){ .res-grid{grid-template-columns:1fr} }
+
+  /* routing table */
+  .rt{width:100%; border-collapse:collapse; font-size:13.5px; margin-bottom:8px}
+  .rt th{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+         text-align:left; font-weight:500; padding:0 10px 10px; border-bottom:1px solid var(--rule-2)}
+  .rt th.r,.rt td.r{text-align:right}
+  .rt td{padding:11px 10px; border-bottom:1px dotted var(--rule)}
+  .rt tr:last-child td{border-bottom:none}
+  .rt .model{font-family:var(--mono); font-size:12.5px}
+  .pill{display:inline-block; font-family:var(--mono); font-size:10.5px; padding:2px 7px; border-radius:20px;
+        border:1px solid var(--rule-2); color:var(--muted); margin-left:8px; vertical-align:middle}
+  .pill--def{background:var(--accent); color:var(--paper); border-color:var(--accent)}
+
+  /* efficient-frontier mini chart */
+  .frontier{margin-top:6px}
+  .frontier figcaption{font-family:var(--mono); font-size:11px; color:var(--faint); margin-top:8px; text-align:center}
+  .grand-total{display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+               margin-top:22px; padding-top:18px; border-top:1px solid var(--rule); flex-wrap:wrap}
+  .grand-total .lbl{font-size:14px; color:var(--muted)}
+  .grand-total .lbl b{color:var(--ink)}
+  .grand-total .amt{font-family:var(--serif); font-size:30px; letter-spacing:-.02em}
+  .grand-total .amt small{font-family:var(--mono); font-size:12px; color:var(--faint); margin-left:8px}
 
   /* ---------- footer ---------- */
-  footer{border-top:1px solid var(--line);padding:54px 0 40px}
-  .foot-grid{display:flex;justify-content:space-between;align-items:flex-start;gap:30px;flex-wrap:wrap}
-  .foot-brand .serif{font-size:1.9rem}
-  .foot-brand .tag{color:var(--mute);font-family:"IBM Plex Mono",monospace;font-size:.74rem;letter-spacing:.05em;margin-top:6px}
-  .foot-links{display:flex;gap:40px;flex-wrap:wrap}
-  .foot-col h4{font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:14px}
-  .foot-col a{display:block;color:var(--ink-dim);font-size:.9rem;margin-bottom:9px;transition:color .2s}
-  .foot-col a:hover{color:var(--amber)}
-  .foot-fine{margin-top:44px;padding-top:22px;border-top:1px solid var(--line);font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--mute);letter-spacing:.04em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
-
-  /* ---------- reveal ---------- */
-  .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
-  .reveal.in{opacity:1;transform:none}
-
-  /* ---------- focus ---------- */
-  a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:4px}
-
-  /* ---------- responsive ---------- */
-  @media(max-width:900px){
-    .hero-grid{grid-template-columns:1fr;gap:38px}
-    .stats{grid-template-columns:repeat(2,1fr)}
-    .posts{grid-template-columns:1fr}
-    .nav-links{display:none}
-    .nav-burger{display:inline-flex}
-  }
-  @media(max-width:560px){
-    body{font-size:16px}
-    .wrap{padding:0 20px}
-    .cards{grid-template-columns:1fr}
-    .stats{grid-template-columns:1fr}
-    .hero{padding:48px 0 40px}
-    .sec{padding:62px 0}
-    .stat .val{font-size:2rem}
-  }
-
-  @media(prefers-reduced-motion:reduce){
-    *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
-    .reveal{opacity:1;transform:none}
-  }
+  .foot{border-top:1px solid var(--rule); padding:54px 0 60px; margin-top:8px}
+  .foot__top{display:flex; gap:40px; flex-wrap:wrap; align-items:flex-start}
+  .foot__brand{font-family:var(--serif); font-size:20px}
+  .foot__brand i{font-style:italic}
+  .foot__tag{color:var(--muted); font-size:14px; margin-top:6px; max-width:30ch}
+  .foot__cols{display:flex; gap:56px; margin-left:auto; flex-wrap:wrap}
+  .foot__h{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin:0 0 12px}
+  .foot__cols a{display:block; font-size:14px; color:var(--muted); padding:3px 0}
+  .foot__cols a:hover{color:var(--ink)}
+  .foot__rule{border:none; border-top:1px solid var(--rule); margin:36px 0 18px}
+  .foot__fine{display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+              font-family:var(--mono); font-size:11.5px; color:var(--faint)}
 </style>
 </head>
 <body>
 
-<!-- NAV -->
-<header class="nav">
-  <div class="wrap nav-in">
-    <a class="brand" href="#top"><span class="tick" aria-hidden="true"></span>Inference<em>Economics</em></a>
-    <nav class="nav-links" aria-label="Primary">
-      <a class="lnk" href="#coverage">COVERAGE</a>
-      <a class="lnk" href="#briefings">BRIEFINGS</a>
-      <a class="lnk" href="#snapshot">DATA</a>
-      <a class="btn btn-solid" href="#subscribe">SUBSCRIBE</a>
+<!-- ====================== HEADER ====================== -->
+<header class="site-head">
+  <div class="wrap site-head__inner">
+    <a class="brand" href="#top">Inference<i>Economics</i><span class="dot">.</span></a>
+    <nav class="nav">
+      <a href="#storage">STORAGE</a>
+      <a href="#rightsize">RIGHT-SIZING</a>
+      <a href="#briefings">BRIEFINGS</a>
+      <a href="#data">DATA</a>
     </nav>
-    <a class="btn nav-burger" href="#subscribe">SUBSCRIBE</a>
+    <button class="btn" onclick="document.getElementById('rightsize').scrollIntoView()">Try the tool →</button>
   </div>
 </header>
 
 <main id="top">
 
-  <!-- HERO -->
-  <section class="hero">
-    <div class="wrap hero-grid">
+  <!-- ====================== STORAGE COSTS ====================== -->
+  <section class="section" id="storage">
+    <div class="wrap">
       <div class="reveal">
-        <div class="eyebrow">Independent research · <b>cost of AI inference</b></div>
-        <h1>The price of <i>intelligence</i>, tracked.</h1>
-        <p class="lede">InferenceEconomics measures the falling cost of machine cognition — the dollars behind every token, and the economics behind every model. Independent analysis of inference pricing, throughput, and the supply of compute.</p>
-        <div class="hero-cta">
-          <a class="btn btn-solid btn-lg" href="#briefings">Read the latest briefing</a>
-          <a class="btn btn-ghost btn-lg" href="#subscribe">Get weekly briefings →</a>
+        <p class="eyebrow">Storage · the layer under the meter</p>
+        <h2 class="h-sec">Compute gets the headline. <em>Storage</em> gets the recurring bill.</h2>
+        <p class="lead">Inference pricing tracks the <b>per-token</b> cost of thinking. But every served model also sits on top of bytes that cost money every month — the <b>weights at rest</b>, the <b>retrieval index</b> behind RAG, and the <b>logs</b> that grow with every request. Here's where those dollars sit, and a quick estimate for your own footprint.</p>
+      </div>
+
+      <!-- headline storage metrics -->
+      <div class="cards reveal">
+        <div class="card">
+          <p class="card__k">Model weights at rest</p>
+          <p class="card__v">$0.021<span class="u">/GB·mo</span></p>
+          <span class="delta delta--mut">▪ object storage, ×replicas</span>
         </div>
-        <div class="hero-foot">
-          <span><b>4×</b> briefings / month</span>
-          <span><b>Vendor-neutral</b> methodology</span>
-          <span><b>Data</b>-first</span>
+        <div class="card">
+          <p class="card__k">Vector store / RAG</p>
+          <p class="card__v">$0.28<span class="u">/GB·mo</span></p>
+          <span class="delta delta--neg">▲ 13× the at-rest rate</span>
+        </div>
+        <div class="card">
+          <p class="card__k">Logs &amp; traces</p>
+          <p class="card__v">$0.021<span class="u">/GB·mo</span></p>
+          <span class="delta delta--neg">▲ scales with volume</span>
+        </div>
+        <div class="card">
+          <p class="card__k">Storage share of TCO</p>
+          <p class="card__v">1–8<span class="u">%</span></p>
+          <span class="delta delta--mut">▪ higher for RAG / long-context</span>
         </div>
       </div>
 
-      <div class="chart-card reveal" aria-hidden="false">
-        <div class="chart-head">
-          <div>
-            <div class="ttl">Cost per million tokens</div>
-            <div class="sub">Frontier-quality output · log scale</div>
+      <!-- model vs data split -->
+      <div class="split reveal">
+        <div class="split__col">
+          <p class="split__tag">Model storage</p>
+          <h3 class="split__h">Storing the brain</h3>
+          <p class="split__p">The weights themselves are cheap to keep, but you pay for every copy — one per region, plus warm load caches and rollback versions.</p>
+          <ul class="ll">
+            <li><span class="term">Weights at rest <small>70B · fp16 ≈ 140 GB</small></span><span class="num">~$2.94 / mo</span></li>
+            <li><span class="term">Replication <small>×3 regions</small></span><span class="num">~$8.82 / mo</span></li>
+            <li><span class="term">Version &amp; rollback cache <small>previous checkpoints</small></span><span class="num">~$4–10 / mo</span></li>
+            <li><span class="term">KV cache <small>ephemeral · billed as compute</small></span><span class="num">in GPU mem</span></li>
+          </ul>
+        </div>
+        <div class="split__col">
+          <p class="split__tag">Data storage</p>
+          <h3 class="split__h">Storing the context</h3>
+          <p class="split__p">This is where storage actually bends the curve. Retrieval indexes and request logs are persistent, queried constantly, and grow with usage.</p>
+          <ul class="ll">
+            <li><span class="term">Customer data at rest <small>blobs, documents</small></span><span class="num">$0.021 / GB·mo</span></li>
+            <li><span class="term">Vector index <small>embeddings for RAG</small></span><span class="num">$0.28 / GB·mo</span></li>
+            <li><span class="term">Request / response logs <small>audit, eval, fine-tune</small></span><span class="num">$0.021 / GB·mo</span></li>
+            <li><span class="term">Hot cache <small>dedup &amp; prompt cache</small></span><span class="num">$0.10 / GB·mo</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- interactive storage estimator -->
+      <div class="estimator panel reveal">
+        <div class="panel__bar">
+          <span class="panel__title">Storage estimator</span>
+          <span class="panel__note">// illustrative rates — edit RATES{} in the source</span>
+        </div>
+        <div class="est-controls">
+          <div class="field">
+            <div class="field__top">
+              <span class="field__lab">Model weights <small>GB, all served models</small></span>
+              <span class="field__val" id="v-weights">140 GB</span>
+            </div>
+            <input type="range" id="s-weights" min="10" max="700" step="5" value="140" />
           </div>
-          <div class="chart-badge">▼ ~10× / yr</div>
+          <div class="field">
+            <div class="field__top">
+              <span class="field__lab">Replicas / regions</span>
+              <span class="field__val" id="v-replicas">×3</span>
+            </div>
+            <input type="range" id="s-replicas" min="1" max="6" step="1" value="3" />
+          </div>
+          <div class="field">
+            <div class="field__top">
+              <span class="field__lab">Data &amp; logs at rest <small>GB</small></span>
+              <span class="field__val" id="v-data">600 GB</span>
+            </div>
+            <input type="range" id="s-data" min="0" max="5000" step="50" value="600" />
+          </div>
+          <div class="field">
+            <div class="field__top">
+              <span class="field__lab">Vector store <small>GB, RAG index</small></span>
+              <span class="field__val" id="v-vector">80 GB</span>
+            </div>
+            <input type="range" id="s-vector" min="0" max="1000" step="10" value="80" />
+          </div>
         </div>
-        <svg class="chart" viewBox="0 0 800 400" role="img" aria-label="Line chart showing the cost per million tokens falling roughly tenfold per year from 2022 to 2026 on a logarithmic scale.">
-          <defs>
-            <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#F2A93C" stop-opacity=".26"/>
-              <stop offset="1" stop-color="#F2A93C" stop-opacity="0"/>
-            </linearGradient>
-            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3.4" result="b"/>
-              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-          </defs>
-
-          <!-- gridlines -->
-          <g>
-            <line class="gridline" x1="90" y1="60"  x2="760" y2="60"/>
-            <line class="gridline" x1="90" y1="120" x2="760" y2="120"/>
-            <line class="gridline" x1="90" y1="180" x2="760" y2="180"/>
-            <line class="gridline" x1="90" y1="240" x2="760" y2="240"/>
-            <line class="gridline" x1="90" y1="300" x2="760" y2="300"/>
-            <line class="gridline" x1="90" y1="360" x2="760" y2="360"/>
-          </g>
-
-          <!-- y axis labels -->
-          <g text-anchor="end">
-            <text class="axis-label" x="80" y="64">$1k</text>
-            <text class="axis-label" x="80" y="124">$100</text>
-            <text class="axis-label" x="80" y="184">$10</text>
-            <text class="axis-label" x="80" y="244">$1</text>
-            <text class="axis-label" x="80" y="304">$0.10</text>
-            <text class="axis-label" x="80" y="364">$0.01</text>
-          </g>
-
-          <!-- x axis labels -->
-          <g text-anchor="middle">
-            <text class="axis-label" x="90"  y="384">2022</text>
-            <text class="axis-label" x="258" y="384">2023</text>
-            <text class="axis-label" x="425" y="384">2024</text>
-            <text class="axis-label" x="593" y="384">2025</text>
-            <text class="axis-label" x="760" y="384">2026</text>
-          </g>
-
-          <!-- now marker line -->
-          <line class="nowline" x1="760" y1="60" x2="760" y2="360"/>
-
-          <!-- area + line -->
-          <path d="M 90,105 C 118,112 202,137 258,151 C 313,166 369,178 425,193 C 481,209 537,227 593,243 C 648,259 732,282 760,289 L 760,360 L 90,360 Z" fill="url(#area)"/>
-          <path id="costLine" d="M 90,105 C 118,112 202,137 258,151 C 313,166 369,178 425,193 C 481,209 537,227 593,243 C 648,259 732,282 760,289"/>
-
-          <!-- data points -->
-          <circle class="dot" cx="90"  cy="105" r="3.4"/>
-          <circle class="dot" cx="258" cy="151" r="3.4"/>
-          <circle class="dot" cx="425" cy="193" r="3.4"/>
-          <circle class="dot" cx="593" cy="243" r="3.4"/>
-          <circle cx="760" cy="289" r="5" fill="#F2A93C">
-            <animate attributeName="r" values="5;9;5" dur="2.4s" repeatCount="indefinite"/>
-            <animate attributeName="fill-opacity" values="1;.3;1" dur="2.4s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="760" cy="289" r="3.2" fill="#F2A93C"/>
-        </svg>
+        <div class="est-out">
+          <div class="stackbar" id="stackbar">
+            <div class="seg seg--model" id="seg-model"></div>
+            <div class="seg seg--data" id="seg-data"></div>
+            <div class="seg seg--vector" id="seg-vector"></div>
+          </div>
+          <div class="legend">
+            <span><i class="swatch seg--model"></i> Model <b class="mono" id="leg-model" style="margin-left:4px">—</b></span>
+            <span><i class="swatch seg--data"></i> Data &amp; logs <b class="mono" id="leg-data" style="margin-left:4px">—</b></span>
+            <span><i class="swatch seg--vector"></i> Vectors <b class="mono" id="leg-vector" style="margin-left:4px">—</b></span>
+          </div>
+          <div class="est-total">
+            <span class="lbl">Monthly storage</span>
+            <span class="amt tnum" id="storage-total">$—</span>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- TICKER -->
-  <div class="ticker" aria-label="Representative inference prices">
-    <div class="ticker-track" id="tick">
-      <!-- duplicated in JS for seamless loop -->
-      <div class="tick-set">
-        <div class="tick-item"><span class="sym">FRONTIER · 1M tok</span><span class="px">$0.15</span><span class="dn">▼ 91%</span></div>
-        <div class="tick-item"><span class="sym">OPEN-70B · 1M tok</span><span class="px">$0.09</span><span class="dn">▼ 87%</span></div>
-        <div class="tick-item"><span class="sym">REASONING · 1M tok</span><span class="px">$0.62</span><span class="dn">▼ 78%</span></div>
-        <div class="tick-item"><span class="sym">EMBED · 1M tok</span><span class="px">$0.008</span><span class="dn">▼ 64%</span></div>
-        <div class="tick-item"><span class="sym">VISION · 1k img</span><span class="px">$0.40</span><span class="dn">▼ 71%</span></div>
-        <div class="tick-item"><span class="sym">GPU-HR · spot</span><span class="px">$1.84</span><span class="dn">▼ 38%</span></div>
-        <div class="tick-item"><span class="sym">TOKENS / $ · frontier</span><span class="px">6.7M</span><span class="dn">▲ 11×</span></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SNAPSHOT -->
-  <section class="sec snapshot" id="snapshot">
+  <!-- ====================== RIGHT-SIZE THE MODEL ====================== -->
+  <section class="section" id="rightsize">
     <div class="wrap">
-      <div class="sec-head reveal">
-        <div class="eyebrow">Market snapshot</div>
-        <h2>Where the meter sits today.</h2>
+      <div class="reveal">
+        <p class="eyebrow">Price–performance · the efficient frontier</p>
+        <h2 class="h-sec">Could a <em>cheaper model</em> serve most of your prompts?</h2>
+        <p class="lead">Most teams run every request on one frontier model — and overpay on the easy ones. Describe your traffic, and this routes each slice of prompts to the cheapest model that can still handle it, then shows what you'd save versus running everything on your current choice.</p>
       </div>
-      <div class="stats reveal">
-        <div class="stat">
-          <div class="lab">Frontier $/Mtok</div>
-          <div class="val">$0.15</div>
-          <div class="delta">▼ 91% YoY</div>
+
+      <div class="sizer panel reveal">
+        <div class="panel__bar">
+          <span class="panel__title">Model right-sizing</span>
+          <span class="panel__note">// blended $/Mtok — illustrative ladder</span>
         </div>
-        <div class="stat">
-          <div class="lab">Open-weight $/Mtok</div>
-          <div class="val">$0.09</div>
-          <div class="delta">▼ 87% YoY</div>
+
+        <!-- controls -->
+        <div class="sz-controls">
+          <div class="field">
+            <div class="field__top">
+              <span class="field__lab">Monthly prompts</span>
+              <span class="field__val" id="v-volume">2,000,000</span>
+            </div>
+            <input type="range" id="s-volume" min="0" max="100" step="1" value="50" />
+          </div>
+          <div class="field">
+            <div class="field__top">
+              <span class="field__lab">Avg tokens / prompt <small>in + out</small></span>
+              <span class="field__val" id="v-tokens">1,500</span>
+            </div>
+            <input type="range" id="s-tokens" min="200" max="8000" step="100" value="1500" />
+          </div>
+
+          <div class="field">
+            <div class="field__top" style="margin-bottom:12px">
+              <span class="field__lab">Prompt mix <small>relative share</small></span>
+            </div>
+            <div class="mix-row">
+              <span class="mix-row__lab">Simple<small>classify · extract · short Q&amp;A</small></span>
+              <input type="range" id="s-simple" min="0" max="100" step="1" value="45" />
+              <span class="mix-row__pct" id="v-simple">45%</span>
+            </div>
+            <div class="mix-row">
+              <span class="mix-row__lab">Moderate<small>summaries · drafting · chat</small></span>
+              <input type="range" id="s-moderate" min="0" max="100" step="1" value="40" />
+              <span class="mix-row__pct" id="v-moderate">40%</span>
+            </div>
+            <div class="mix-row">
+              <span class="mix-row__lab">Complex<small>reasoning · hard code · analysis</small></span>
+              <input type="range" id="s-complex" min="0" max="100" step="1" value="15" />
+              <span class="mix-row__pct" id="v-complex">15%</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="field__top" style="margin-bottom:11px">
+              <span class="field__lab">Current model <small>used for everything today</small></span>
+            </div>
+            <div class="seg-group" id="model-group"></div>
+          </div>
         </div>
-        <div class="stat">
-          <div class="lab">Cost halving period</div>
-          <div class="val">~5 mo</div>
-          <div class="delta flat">and shrinking</div>
-        </div>
-        <div class="stat">
-          <div class="lab">Tokens per dollar</div>
-          <div class="val">6.7M</div>
-          <div class="delta">▲ 11× YoY</div>
+
+        <!-- results -->
+        <div class="sz-results">
+          <div class="verdict" id="verdict" aria-live="polite">
+            <p class="verdict__tag" id="verdict-tag">Assessment</p>
+            <p class="verdict__txt" id="verdict-txt">—</p>
+          </div>
+
+          <div class="res-grid">
+            <div class="res">
+              <p class="res__k">Current / mo</p>
+              <p class="res__v tnum" id="r-current">$—</p>
+            </div>
+            <div class="res">
+              <p class="res__k">Right-sized / mo</p>
+              <p class="res__v tnum" id="r-right">$—</p>
+            </div>
+            <div class="res res--save">
+              <p class="res__k">You'd save</p>
+              <p class="res__v tnum" id="r-save">—</p>
+            </div>
+          </div>
+
+          <table class="rt">
+            <thead>
+              <tr><th>Slice</th><th>Routed to</th><th class="r">Share</th><th class="r">Cost / mo</th></tr>
+            </thead>
+            <tbody id="rt-body"></tbody>
+          </table>
+
+          <figure class="frontier">
+            <svg id="frontier-svg" viewBox="0 0 520 200" width="100%" role="img"
+                 aria-label="Price versus capability for each model, with current and recommended highlighted"></svg>
+            <figcaption>Price (log) vs capability · ◯ current · ● recommended default</figcaption>
+          </figure>
+
+          <div class="grand-total">
+            <span class="lbl">Total to serve: <b>inference</b> (right-sized) + <b>storage</b></span>
+            <span class="amt tnum"><span id="grand-total">$—</span><small id="grand-share"></small></span>
+          </div>
         </div>
       </div>
-      <p class="note">// Representative figures for layout — swap in your live dataset before publishing.</p>
     </div>
   </section>
 
-  <!-- COVERAGE -->
-  <section class="sec" id="coverage">
+  <!-- ====================== FOOTER ====================== -->
+  <footer class="foot" id="data">
     <div class="wrap">
-      <div class="sec-head reveal">
-        <div class="eyebrow">What we cover</div>
-        <h2>Where compute meets the income statement.</h2>
+      <div class="foot__top">
+        <div>
+          <div class="foot__brand">Inference<i>Economics</i></div>
+          <p class="foot__tag">The price of intelligence, tracked.</p>
+        </div>
+        <div class="foot__cols">
+          <div>
+            <p class="foot__h">Research</p>
+            <a href="#briefings">Briefings</a>
+            <a href="#data">Data &amp; charts</a>
+            <a href="#storage">Storage costs</a>
+          </div>
+          <div>
+            <p class="foot__h">Tools</p>
+            <a href="#rightsize">Model right-sizing</a>
+            <a href="#storage">Storage estimator</a>
+          </div>
+        </div>
       </div>
-      <div class="cards">
-        <div class="card reveal">
-          <div class="ix">COST CURVES</div>
-          <h3>Marginal cost of cognition</h3>
-          <p>Token-level cost across frontier and open models, charted over time — and the forces that bend the curve down.</p>
-        </div>
-        <div class="card reveal">
-          <div class="ix">EFFICIENCY</div>
-          <h3>Throughput &amp; utilization</h3>
-          <p>How batching, context length, and accelerator choice decide the real cost of a single request, not the sticker price.</p>
-        </div>
-        <div class="card reveal">
-          <div class="ix">FRONTIER</div>
-          <h3>Price–performance</h3>
-          <p>Capability per dollar as it moves, and where the efficient frontier between cost and quality actually sits.</p>
-        </div>
-        <div class="card reveal">
-          <div class="ix">SUPPLY</div>
-          <h3>Capacity &amp; supply</h3>
-          <p>Accelerator availability, data-center constraints, and the emerging spot market for inference compute.</p>
-        </div>
+      <hr class="foot__rule" />
+      <div class="foot__fine">
+        <span>© 2026 InferenceEconomics</span>
+        <span>Figures shown are illustrative placeholders — swap in your live dataset before publishing.</span>
       </div>
     </div>
-  </section>
-
-  <!-- BRIEFINGS -->
-  <section class="sec briefings" id="briefings">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <div class="eyebrow">Latest</div>
-        <h2>Briefings.</h2>
-      </div>
-      <div class="posts">
-        <a class="post reveal" href="#">
-          <div class="kick">Jun 2026 · <b>Pricing</b></div>
-          <h3>A million tokens now costs less than a coffee</h3>
-          <p>The forces behind another order-of-magnitude drop in inference pricing — and who captures the surplus it creates.</p>
-          <div class="read">Read briefing →</div>
-        </a>
-        <a class="post reveal" href="#">
-          <div class="kick">May 2026 · <b>Infra</b></div>
-          <h3>The utilization gap nobody prices in</h3>
-          <p>Idle accelerators are the hidden tax on inference. A teardown of where the dollars actually leak between request and bill.</p>
-          <div class="read">Read briefing →</div>
-        </a>
-        <a class="post reveal" href="#">
-          <div class="kick">May 2026 · <b>Markets</b></div>
-          <h3>Open weights and the race to zero margin</h3>
-          <p>When the model itself is free, the economics shift to serving it. What that means for anyone building on top.</p>
-          <div class="read">Read briefing →</div>
-        </a>
-      </div>
-      <p class="note">// Sample posts — replace with your own articles or wire up a CMS / markdown feed.</p>
-    </div>
-  </section>
-
-  <!-- SUBSCRIBE -->
-  <section class="sec subscribe" id="subscribe">
-    <div class="wrap">
-      <div class="sub-box reveal">
-        <div class="eyebrow">The briefing</div>
-        <h2>Track the cost of intelligence.</h2>
-        <p>A weekly read on inference pricing, compute supply, and the economics of running AI. No fluff — just the numbers that move.</p>
-        <form class="form" id="subForm" novalidate>
-          <input type="email" id="email" placeholder="you@company.com" aria-label="Email address" required>
-          <button class="btn btn-solid" type="submit">Subscribe</button>
-        </form>
-        <div class="form-msg" id="formMsg" role="status" aria-live="polite"></div>
-      </div>
-    </div>
-  </section>
-
+  </footer>
 </main>
 
-<!-- FOOTER -->
-<footer>
-  <div class="wrap">
-    <div class="foot-grid">
-      <div class="foot-brand">
-        <div class="serif">Inference<span style="color:var(--amber)">Economics</span></div>
-        <div class="tag">The price of intelligence, tracked.</div>
-      </div>
-      <div class="foot-links">
-        <div class="foot-col">
-          <h4>Research</h4>
-          <a href="#briefings">Briefings</a>
-          <a href="#snapshot">Data &amp; charts</a>
-          <a href="#coverage">Methodology</a>
-        </div>
-        <div class="foot-col">
-          <h4>About</h4>
-          <a href="#">Who we are</a>
-          <a href="#subscribe">Newsletter</a>
-          <a href="#">Contact</a>
-        </div>
-      </div>
-    </div>
-    <div class="foot-fine">
-      <span>© 2026 InferenceEconomics</span>
-      <span>Figures shown are illustrative placeholders.</span>
-    </div>
-  </div>
-</footer>
-
 <script>
-(function(){
-  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* ============================================================
+   CONFIG  —  ILLUSTRATIVE. Swap in your live numbers here.
+   ============================================================ */
+const RATES = { object: 0.021, vector: 0.28 };   // $/GB-month
 
-  // 1. Draw the cost line on load
-  var line = document.getElementById('costLine');
-  if(line && !reduce){
-    try{
-      var len = line.getTotalLength();
-      line.style.strokeDasharray = len;
-      line.style.strokeDashoffset = len;
-      line.getBoundingClientRect(); // force reflow
-      line.style.transition = 'stroke-dashoffset 2.1s cubic-bezier(.22,1,.36,1)';
-      requestAnimationFrame(function(){ line.style.strokeDashoffset = '0'; });
-    }catch(e){ /* leave fully drawn */ }
+// Model ladder: blended $ per million tokens, + a capability tier (1..5)
+const MODELS = [
+  { id:'small',     name:'Open · Small (8B)',  price:0.05, tier:1 },
+  { id:'open70b',   name:'Open · 70B',         price:0.09, tier:2 },
+  { id:'balanced',  name:'Balanced',           price:0.30, tier:3 },
+  { id:'frontier',  name:'Frontier',           price:0.90, tier:4 },
+  { id:'reasoning', name:'Frontier · Reason',  price:1.80, tier:5 },
+];
+
+// Each traffic slice needs at least this capability tier
+const BUCKETS = [
+  { id:'simple',   label:'Simple',   minTier:1 },
+  { id:'moderate', label:'Moderate', minTier:2 },
+  { id:'complex',  label:'Complex',  minTier:4 },
+];
+
+const cheapestFor = (minTier) =>
+  MODELS.filter(m => m.tier >= minTier).sort((a,b)=>a.price-b.price)[0];
+const modelById = (id) => MODELS.find(m => m.id === id);
+
+/* ---------- state ---------- */
+const state = {
+  weights:140, replicas:3, data:600, vector:80,        // storage
+  volume:2_000_000, tokens:1500,                        // traffic
+  mix:{ simple:45, moderate:40, complex:15 },
+  current:'frontier'
+};
+
+/* ---------- formatting ---------- */
+const fmtMoney = (n) => {
+  if (n >= 1000) return '$' + Math.round(n).toLocaleString('en-US');
+  if (n >= 100)  return '$' + n.toFixed(0);
+  return '$' + n.toFixed(2);
+};
+const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
+
+/* ---------- volume slider is log-mapped (100k → 50M) ---------- */
+const VOL_MIN = 100_000, VOL_MAX = 50_000_000;
+const sliderToVolume = (t) => {
+  const v = VOL_MIN * Math.pow(VOL_MAX/VOL_MIN, t/100);
+  // round to a tidy step
+  const mag = Math.pow(10, Math.floor(Math.log10(v)));
+  return Math.round(v/(mag/2))*(mag/2);
+};
+
+/* ============================================================
+   COMPUTE
+   ============================================================ */
+function computeStorage(){
+  const model  = state.weights * state.replicas * RATES.object;
+  const data   = state.data   * RATES.object;
+  const vector = state.vector * RATES.vector;
+  return { model, data, vector, total: model + data + vector };
+}
+
+function computeInference(){
+  const raw = state.mix;
+  const sum = raw.simple + raw.moderate + raw.complex || 1;
+  const share = {
+    simple:   raw.simple   / sum,
+    moderate: raw.moderate / sum,
+    complex:  raw.complex  / sum
+  };
+  const perPrompt = state.tokens / 1e6;               // Mtok per prompt
+  const cur = modelById(state.current);
+  const currentMonthly = state.volume * perPrompt * cur.price;
+
+  // route each slice to the cheapest capable model
+  const rows = BUCKETS.map(b => {
+    const m = cheapestFor(b.minTier);
+    const vol = state.volume * share[b.id];
+    const cost = vol * perPrompt * m.price;
+    return { bucket:b, share:share[b.id], model:m, cost };
+  });
+  const rightMonthly = rows.reduce((a,r)=>a+r.cost, 0);
+
+  // which model carries the largest share of routed volume = the default
+  const byModel = {};
+  rows.forEach(r => { byModel[r.model.id] = (byModel[r.model.id]||0) + r.share; });
+  const defaultId = Object.keys(byModel).sort((a,b)=>byModel[b]-byModel[a])[0];
+  const defaultModel = modelById(defaultId);
+  const defaultShare = byModel[defaultId];
+
+  const savings = currentMonthly - rightMonthly;
+  const savingsPct = currentMonthly > 0 ? savings/currentMonthly : 0;
+
+  return { share, currentMonthly, rightMonthly, rows, defaultModel,
+           defaultShare, savings, savingsPct, cur };
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function setFill(el){
+  const min = +el.min, max = +el.max, val = +el.value;
+  el.style.setProperty('--fill', ((val-min)/(max-min)*100) + '%');
+}
+
+let animRAF = null;
+function animateMoney(el, to){
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    el.textContent = fmtMoney(to); return;
   }
+  cancelAnimationFrame(animRAF);
+  const from = parseFloat((el.dataset.cur||'0')); const start = performance.now(); const dur = 420;
+  const step = (now)=>{
+    const p = Math.min(1,(now-start)/dur);
+    const e = 1-Math.pow(1-p,3);
+    const v = from + (to-from)*e;
+    el.textContent = fmtMoney(v);
+    if (p<1) animRAF = requestAnimationFrame(step); else el.dataset.cur = to;
+  };
+  animRAF = requestAnimationFrame(step);
+}
 
-  // 2. Seamless ticker: duplicate the set
-  var track = document.getElementById('tick');
-  if(track){
-    var set = track.querySelector('.tick-set');
-    if(set){ track.appendChild(set.cloneNode(true)); }
-  }
+function renderFrontier(currentId, defaultId){
+  const svg = document.getElementById('frontier-svg');
+  const W=520,H=200, padL=26,padR=22,padT=20,padB=30;
+  const xs = MODELS.map((_,i)=> padL + i*((W-padL-padR)/(MODELS.length-1)));
+  const pMin=Math.log(0.04), pMax=Math.log(2.0);
+  const y = (price)=> padT + (1-(Math.log(price)-pMin)/(pMax-pMin))*(H-padT-padB);
+  const pts = MODELS.map((m,i)=>`${xs[i].toFixed(1)},${y(m.price).toFixed(1)}`).join(' ');
+  let s = `<polyline points="${pts}" style="fill:none;stroke:var(--rule-2);stroke-width:1.5"/>`;
+  MODELS.forEach((m,i)=>{
+    const cx=xs[i].toFixed(1), cy=y(m.price).toFixed(1);
+    const isCur = m.id===currentId, isDef = m.id===defaultId;
+    if (isCur) s += `<circle cx="${cx}" cy="${cy}" r="11" style="fill:none;stroke:var(--neg);stroke-width:2"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r="5.5" style="fill:${isDef?'var(--accent)':'var(--surface)'};stroke:${isDef?'var(--accent)':'var(--muted)'};stroke-width:2"/>`;
+    s += `<text x="${cx}" y="${H-12}" text-anchor="middle" font-size="9" style="font-family:var(--mono);fill:var(--faint)">${m.name.split('·')[0].trim()}</text>`;
+    s += `<text x="${cx}" y="${(y(m.price)-15).toFixed(1)}" text-anchor="middle" font-size="9" style="font-family:var(--mono);fill:${isDef?'var(--accent)':'var(--faint)'}">$${m.price.toFixed(2)}</text>`;
+  });
+  svg.innerHTML = s;
+}
 
-  // 3. Scroll reveal
-  var items = document.querySelectorAll('.reveal');
-  if('IntersectionObserver' in window && !reduce){
-    var io = new IntersectionObserver(function(entries){
-      entries.forEach(function(en){
-        if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); }
-      });
-    },{threshold:.12, rootMargin:'0px 0px -40px 0px'});
-    items.forEach(function(el){ io.observe(el); });
+function render(){
+  /* sliders fill */
+  document.querySelectorAll('input[type=range]').forEach(setFill);
+
+  /* ---- storage ---- */
+  const st = computeStorage();
+  document.getElementById('v-weights').textContent  = state.weights + ' GB';
+  document.getElementById('v-replicas').textContent = '×' + state.replicas;
+  document.getElementById('v-data').textContent     = fmtInt(state.data) + ' GB';
+  document.getElementById('v-vector').textContent   = fmtInt(state.vector) + ' GB';
+
+  const stTot = st.total || 1;
+  document.getElementById('seg-model').style.width  = (st.model/stTot*100)+'%';
+  document.getElementById('seg-data').style.width   = (st.data/stTot*100)+'%';
+  document.getElementById('seg-vector').style.width = (st.vector/stTot*100)+'%';
+  document.getElementById('leg-model').textContent  = fmtMoney(st.model);
+  document.getElementById('leg-data').textContent   = fmtMoney(st.data);
+  document.getElementById('leg-vector').textContent = fmtMoney(st.vector);
+  document.getElementById('storage-total').textContent = fmtMoney(st.total) + ' /mo';
+
+  /* ---- inference / right-sizing ---- */
+  document.getElementById('v-volume').textContent = fmtInt(state.volume);
+  document.getElementById('v-tokens').textContent = fmtInt(state.tokens);
+  const sum = state.mix.simple + state.mix.moderate + state.mix.complex || 1;
+  document.getElementById('v-simple').textContent   = Math.round(state.mix.simple/sum*100)+'%';
+  document.getElementById('v-moderate').textContent = Math.round(state.mix.moderate/sum*100)+'%';
+  document.getElementById('v-complex').textContent  = Math.round(state.mix.complex/sum*100)+'%';
+
+  const inf = computeInference();
+  document.getElementById('r-current').textContent = fmtMoney(inf.currentMonthly);
+  document.getElementById('r-right').textContent   = fmtMoney(inf.rightMonthly);
+  const saveEl = document.getElementById('r-save');
+  if (inf.savings > 0.5){
+    saveEl.textContent = fmtMoney(inf.savings) + ' · ' + Math.round(inf.savingsPct*100) + '%';
   } else {
-    items.forEach(function(el){ el.classList.add('in'); });
+    saveEl.textContent = 'already lean';
   }
 
-  // 4. Subscribe form — local confirmation only (no data is sent anywhere yet)
-  var form = document.getElementById('subForm');
-  var msg = document.getElementById('formMsg');
-  if(form){
-    form.addEventListener('submit', function(e){
-      e.preventDefault();
-      var email = document.getElementById('email').value.trim();
-      var ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-      if(!ok){ msg.textContent = '// Enter a valid email address'; return; }
-      msg.textContent = '// Connect an email provider to go live — nothing was sent.';
-      form.reset();
-    });
+  /* routing table */
+  const body = document.getElementById('rt-body');
+  body.innerHTML = inf.rows.map(r => {
+    const isDef = r.model.id === inf.defaultModel.id;
+    return `<tr>
+      <td>${r.bucket.label}</td>
+      <td class="model">${r.model.name}${isDef?'<span class="pill pill--def">default</span>':''}</td>
+      <td class="r tnum">${Math.round(r.share*100)}%</td>
+      <td class="r tnum">${fmtMoney(r.cost)}</td>
+    </tr>`;
+  }).join('');
+
+  /* verdict copy */
+  const v  = document.getElementById('verdict');
+  const vt = document.getElementById('verdict-tag');
+  const vx = document.getElementById('verdict-txt');
+  const curName = inf.cur.name;
+  const pct = Math.round(inf.savingsPct*100);
+  const money = (n)=>fmtMoney(n);
+
+  // share of prompts whose right-sized model is cheaper than the current one
+  const cheaperRows  = inf.rows.filter(r => r.model.price < inf.cur.price);
+  const cheaperShare = cheaperRows.reduce((a,r)=>a+r.share,0);
+  const cheaperPct   = Math.round(cheaperShare*100);
+  let leadName = curName;
+  if (cheaperRows.length){
+    const byM = {}; cheaperRows.forEach(r => byM[r.model.id]=(byM[r.model.id]||0)+r.share);
+    const topId = Object.keys(byM).sort((a,b)=>byM[b]-byM[a])[0];
+    leadName = modelById(topId).name;
   }
-})();
+
+  v.classList.remove('is-over');
+  if (inf.savings < -0.5){
+    v.classList.add('is-over'); vt.textContent = 'Quality risk';
+    vx.innerHTML = `Careful — <b>${curName}</b> sits below the tier your complex slice needs. `
+      + `Matching quality there means routing those prompts to a stronger model, which would `
+      + `<b>raise</b> the bill to about <b>${money(inf.rightMonthly)}</b>/mo. Here the cheap default is costing accuracy, not dollars.`;
+  } else if (cheaperShare >= 0.5 && inf.savings > 0.5){
+    vt.textContent = 'Cut your bill';
+    vx.innerHTML = `Yes — most of your traffic (<b>~${cheaperPct}%</b>) doesn't need <b>${curName}</b>. `
+      + `Route the simple and moderate prompts to cheaper models (mostly <b>${leadName}</b>) and keep `
+      + `${curName} for the rest: blended cost falls from <b>${money(inf.currentMonthly)}</b> to `
+      + `<b>${money(inf.rightMonthly)}</b> a month — <b>${pct}% less</b>.`;
+  } else if (inf.savings > 0.5){
+    vt.textContent = 'Room to trim';
+    vx.innerHTML = `About <b>${cheaperPct}%</b> of prompts can move to cheaper models, taking you from `
+      + `<b>${money(inf.currentMonthly)}</b> to <b>${money(inf.rightMonthly)}</b> a month — a <b>${pct}%</b> saving — `
+      + `without touching the hard prompts.`;
+  } else {
+    vt.textContent = 'Well matched';
+    vx.innerHTML = `Your current choice already sits near the efficient frontier for this mix. `
+      + `A cheaper default would start dropping quality on the prompts you actually have.`;
+  }
+
+  renderFrontier(state.current, inf.defaultModel.id);
+
+  /* grand total = right-sized inference + storage */
+  const grand = inf.rightMonthly + st.total;
+  animateMoney(document.getElementById('grand-total'), grand);
+  const sharePct = grand>0 ? Math.round(st.total/grand*100) : 0;
+  document.getElementById('grand-share').textContent = ' · storage ' + sharePct + '%';
+}
+
+/* ============================================================
+   WIRING
+   ============================================================ */
+function bind(id, fn){
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => { fn(el); render(); });
+}
+bind('s-weights',  e => state.weights  = +e.value);
+bind('s-replicas', e => state.replicas = +e.value);
+bind('s-data',     e => state.data     = +e.value);
+bind('s-vector',   e => state.vector   = +e.value);
+bind('s-volume',   e => state.volume   = sliderToVolume(+e.value));
+bind('s-tokens',   e => state.tokens   = +e.value);
+bind('s-simple',   e => state.mix.simple   = +e.value);
+bind('s-moderate', e => state.mix.moderate = +e.value);
+bind('s-complex',  e => state.mix.complex  = +e.value);
+
+/* current-model segmented control */
+const grp = document.getElementById('model-group');
+grp.innerHTML = MODELS.map(m =>
+  `<button class="seg-btn" role="button" aria-pressed="${m.id===state.current}"
+           data-id="${m.id}">${m.name}</button>`).join('');
+grp.addEventListener('click', e => {
+  const b = e.target.closest('.seg-btn'); if(!b) return;
+  state.current = b.dataset.id;
+  grp.querySelectorAll('.seg-btn').forEach(x =>
+    x.setAttribute('aria-pressed', x.dataset.id===state.current));
+  render();
+});
+
+/* scroll reveal */
+const io = new IntersectionObserver((entries)=>{
+  entries.forEach(en => { if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target);} });
+}, { threshold:.12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+render();
 </script>
 </body>
 </html>
