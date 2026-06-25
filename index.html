@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InferenceEconomics — The price of intelligence, tracked</title>
+<meta name="description" content="Independent research on the cost, pricing, and supply of AI inference. The dollars behind every token.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A1315;
+    --bg-grid:rgba(150,180,180,.035);
+    --panel:#0F1D20;
+    --panel-2:#0C181A;
+    --line:rgba(150,180,180,.13);
+    --line-strong:rgba(150,180,180,.26);
+    --ink:#EAF0EE;
+    --ink-dim:#A6BAB8;
+    --mute:#62807F;
+    --amber:#F2A93C;
+    --amber-dim:rgba(242,169,60,.14);
+    --amber-line:rgba(242,169,60,.4);
+    --max:1180px;
+    --r:14px;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,sans-serif;
+    font-size:17px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    background-image:
+      linear-gradient(var(--bg-grid) 1px,transparent 1px),
+      linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px);
+    background-size:46px 46px;
+    overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  ::selection{background:var(--amber);color:#0A1315}
+
+  .wrap{max-width:var(--max);margin:0 auto;padding:0 28px}
+
+  /* ---------- type helpers ---------- */
+  .serif{font-family:"Instrument Serif",Georgia,serif;font-weight:400;letter-spacing:.4px}
+  .mono{font-family:"IBM Plex Mono",monospace}
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--mute);
+  }
+  .eyebrow b{color:var(--amber);font-weight:500}
+
+  /* ---------- nav ---------- */
+  header.nav{
+    position:sticky;top:0;z-index:50;
+    backdrop-filter:blur(10px);
+    background:rgba(10,19,21,.72);
+    border-bottom:1px solid var(--line);
+  }
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:66px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:1.02rem;letter-spacing:-.01em}
+  .brand .tick{width:11px;height:18px;background:var(--amber);display:inline-block;box-shadow:0 0 14px rgba(242,169,60,.6)}
+  .brand em{color:var(--amber);font-style:normal}
+  .nav-links{display:flex;align-items:center;gap:30px}
+  .nav-links a.lnk{font-family:"IBM Plex Mono",monospace;font-size:.78rem;letter-spacing:.06em;color:var(--ink-dim);transition:color .2s}
+  .nav-links a.lnk:hover{color:var(--ink)}
+  .btn{
+    font-family:"IBM Plex Mono",monospace;font-size:.78rem;letter-spacing:.04em;
+    padding:9px 16px;border-radius:8px;border:1px solid var(--amber-line);
+    color:var(--amber);background:var(--amber-dim);transition:all .2s;cursor:pointer;
+  }
+  .btn:hover{background:var(--amber);color:#0A1315;border-color:var(--amber)}
+  .btn-solid{background:var(--amber);color:#0A1315;border-color:var(--amber)}
+  .btn-solid:hover{filter:brightness(1.08)}
+  .btn-ghost{border-color:var(--line-strong);color:var(--ink-dim);background:transparent}
+  .btn-ghost:hover{border-color:var(--ink-dim);color:var(--ink);background:transparent}
+  .nav-burger{display:none}
+
+  /* ---------- hero ---------- */
+  .hero{padding:74px 0 54px;position:relative}
+  .hero-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:54px;align-items:center}
+  .hero h1{
+    font-family:"Instrument Serif",Georgia,serif;font-weight:400;
+    font-size:clamp(3rem,6.4vw,5.4rem);line-height:.98;letter-spacing:.5px;
+    margin:20px 0 22px;
+  }
+  .hero h1 i{font-style:italic;color:var(--amber)}
+  .hero p.lede{font-size:1.12rem;color:var(--ink-dim);max-width:34em;margin-bottom:30px}
+  .hero-cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .btn-lg{padding:13px 22px;font-size:.82rem;border-radius:10px}
+  .hero-foot{margin-top:30px;display:flex;gap:26px;flex-wrap:wrap;color:var(--mute);font-family:"IBM Plex Mono",monospace;font-size:.74rem;letter-spacing:.04em}
+  .hero-foot span b{color:var(--ink-dim);font-weight:500}
+
+  /* ---------- chart panel ---------- */
+  .chart-card{
+    background:radial-gradient(120% 90% at 78% 18%,rgba(242,169,60,.10),transparent 60%),var(--panel);
+    border:1px solid var(--line);border-radius:var(--r);
+    padding:22px 20px 14px;position:relative;overflow:hidden;
+  }
+  .chart-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:12px}
+  .chart-head .ttl{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.13em;color:var(--ink-dim);text-transform:uppercase}
+  .chart-head .sub{font-family:"IBM Plex Mono",monospace;font-size:.64rem;color:var(--mute);letter-spacing:.06em;margin-top:4px}
+  .chart-badge{font-family:"IBM Plex Mono",monospace;font-size:.66rem;color:var(--amber);border:1px solid var(--amber-line);border-radius:6px;padding:3px 8px;white-space:nowrap}
+  svg.chart{width:100%;height:auto;display:block}
+  .gridline{stroke:var(--line);stroke-width:1}
+  .axis-label{fill:var(--mute);font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.04em}
+  #costLine{fill:none;stroke:var(--amber);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;filter:url(#glow)}
+  .dot{fill:var(--bg);stroke:var(--amber);stroke-width:2}
+  .nowline{stroke:var(--amber-line);stroke-width:1;stroke-dasharray:3 4}
+
+  /* ---------- ticker ---------- */
+  .ticker{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel-2);overflow:hidden;white-space:nowrap;position:relative}
+  .ticker::before,.ticker::after{content:"";position:absolute;top:0;bottom:0;width:70px;z-index:2;pointer-events:none}
+  .ticker::before{left:0;background:linear-gradient(90deg,var(--panel-2),transparent)}
+  .ticker::after{right:0;background:linear-gradient(270deg,var(--panel-2),transparent)}
+  .ticker-track{display:inline-flex;gap:0;animation:scroll 42s linear infinite}
+  .tick-item{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;font-family:"IBM Plex Mono",monospace;font-size:.78rem;letter-spacing:.04em;border-right:1px solid var(--line)}
+  .tick-item .sym{color:var(--ink-dim)}
+  .tick-item .px{color:var(--ink)}
+  .tick-item .dn{color:var(--amber)}
+  @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  /* ---------- generic section ---------- */
+  .sec{padding:84px 0}
+  .sec-head{max-width:38em;margin-bottom:46px}
+  .sec-head h2{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:clamp(2rem,4vw,3rem);line-height:1.05;letter-spacing:.4px;margin:14px 0 0}
+  .note{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--mute);letter-spacing:.04em;margin-top:30px}
+
+  /* ---------- snapshot ---------- */
+  .snapshot{border-top:1px solid var(--line)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .stat{background:var(--panel);padding:26px 24px}
+  .stat .lab{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+  .stat .val{font-family:"IBM Plex Mono",monospace;font-size:2.3rem;font-weight:500;color:var(--ink);margin:14px 0 6px;letter-spacing:-.01em}
+  .stat .delta{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--amber);letter-spacing:.03em}
+  .stat .delta.flat{color:var(--ink-dim)}
+
+  /* ---------- coverage ---------- */
+  .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    padding:28px 26px;transition:border-color .25s,transform .25s;
+  }
+  .card:hover{border-color:var(--line-strong);transform:translateY(-3px)}
+  .card .ix{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.12em;color:var(--amber)}
+  .card h3{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:1.7rem;margin:14px 0 10px;letter-spacing:.3px}
+  .card p{color:var(--ink-dim);font-size:.98rem}
+
+  /* ---------- briefings ---------- */
+  .briefings{border-top:1px solid var(--line)}
+  .posts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .post{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line);border-radius:var(--r);padding:26px 24px;
+    display:flex;flex-direction:column;min-height:260px;transition:border-color .25s}
+  .post:hover{border-color:var(--amber-line)}
+  .post .kick{font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.1em;color:var(--mute);text-transform:uppercase}
+  .post .kick b{color:var(--amber);font-weight:500}
+  .post h3{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:1.55rem;line-height:1.1;margin:16px 0 12px;letter-spacing:.3px}
+  .post p{color:var(--ink-dim);font-size:.94rem;flex:1}
+  .post .read{font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--amber);margin-top:18px;letter-spacing:.03em}
+
+  /* ---------- subscribe ---------- */
+  .subscribe{border-top:1px solid var(--line)}
+  .sub-box{
+    background:radial-gradient(90% 140% at 12% 0%,rgba(242,169,60,.08),transparent 55%),var(--panel);
+    border:1px solid var(--line);border-radius:var(--r);
+    padding:54px clamp(28px,5vw,64px);text-align:center;
+  }
+  .sub-box h2{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:clamp(2.2rem,4.4vw,3.2rem);letter-spacing:.4px;line-height:1.04}
+  .sub-box p{color:var(--ink-dim);max-width:30em;margin:16px auto 30px}
+  .form{display:flex;gap:10px;max-width:440px;margin:0 auto;flex-wrap:wrap;justify-content:center}
+  .form input{
+    flex:1;min-width:220px;background:var(--bg);border:1px solid var(--line-strong);
+    border-radius:10px;padding:13px 16px;color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:.85rem;
+  }
+  .form input::placeholder{color:var(--mute)}
+  .form input:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-dim)}
+  .form .btn{padding:13px 22px}
+  .form-msg{margin-top:18px;font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--amber);min-height:1em}
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--line);padding:54px 0 40px}
+  .foot-grid{display:flex;justify-content:space-between;align-items:flex-start;gap:30px;flex-wrap:wrap}
+  .foot-brand .serif{font-size:1.9rem}
+  .foot-brand .tag{color:var(--mute);font-family:"IBM Plex Mono",monospace;font-size:.74rem;letter-spacing:.05em;margin-top:6px}
+  .foot-links{display:flex;gap:40px;flex-wrap:wrap}
+  .foot-col h4{font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:14px}
+  .foot-col a{display:block;color:var(--ink-dim);font-size:.9rem;margin-bottom:9px;transition:color .2s}
+  .foot-col a:hover{color:var(--amber)}
+  .foot-fine{margin-top:44px;padding-top:22px;border-top:1px solid var(--line);font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--mute);letter-spacing:.04em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+
+  /* ---------- reveal ---------- */
+  .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  /* ---------- focus ---------- */
+  a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:4px}
+
+  /* ---------- responsive ---------- */
+  @media(max-width:900px){
+    .hero-grid{grid-template-columns:1fr;gap:38px}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .posts{grid-template-columns:1fr}
+    .nav-links{display:none}
+    .nav-burger{display:inline-flex}
+  }
+  @media(max-width:560px){
+    body{font-size:16px}
+    .wrap{padding:0 20px}
+    .cards{grid-template-columns:1fr}
+    .stats{grid-template-columns:1fr}
+    .hero{padding:48px 0 40px}
+    .sec{padding:62px 0}
+    .stat .val{font-size:2rem}
+  }
+
+  @media(prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+    .reveal{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top"><span class="tick" aria-hidden="true"></span>Inference<em>Economics</em></a>
+    <nav class="nav-links" aria-label="Primary">
+      <a class="lnk" href="#coverage">COVERAGE</a>
+      <a class="lnk" href="#briefings">BRIEFINGS</a>
+      <a class="lnk" href="#snapshot">DATA</a>
+      <a class="btn btn-solid" href="#subscribe">SUBSCRIBE</a>
+    </nav>
+    <a class="btn nav-burger" href="#subscribe">SUBSCRIBE</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="reveal">
+        <div class="eyebrow">Independent research · <b>cost of AI inference</b></div>
+        <h1>The price of <i>intelligence</i>, tracked.</h1>
+        <p class="lede">InferenceEconomics measures the falling cost of machine cognition — the dollars behind every token, and the economics behind every model. Independent analysis of inference pricing, throughput, and the supply of compute.</p>
+        <div class="hero-cta">
+          <a class="btn btn-solid btn-lg" href="#briefings">Read the latest briefing</a>
+          <a class="btn btn-ghost btn-lg" href="#subscribe">Get weekly briefings →</a>
+        </div>
+        <div class="hero-foot">
+          <span><b>4×</b> briefings / month</span>
+          <span><b>Vendor-neutral</b> methodology</span>
+          <span><b>Data</b>-first</span>
+        </div>
+      </div>
+
+      <div class="chart-card reveal" aria-hidden="false">
+        <div class="chart-head">
+          <div>
+            <div class="ttl">Cost per million tokens</div>
+            <div class="sub">Frontier-quality output · log scale</div>
+          </div>
+          <div class="chart-badge">▼ ~10× / yr</div>
+        </div>
+        <svg class="chart" viewBox="0 0 800 400" role="img" aria-label="Line chart showing the cost per million tokens falling roughly tenfold per year from 2022 to 2026 on a logarithmic scale.">
+          <defs>
+            <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#F2A93C" stop-opacity=".26"/>
+              <stop offset="1" stop-color="#F2A93C" stop-opacity="0"/>
+            </linearGradient>
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3.4" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <!-- gridlines -->
+          <g>
+            <line class="gridline" x1="90" y1="60"  x2="760" y2="60"/>
+            <line class="gridline" x1="90" y1="120" x2="760" y2="120"/>
+            <line class="gridline" x1="90" y1="180" x2="760" y2="180"/>
+            <line class="gridline" x1="90" y1="240" x2="760" y2="240"/>
+            <line class="gridline" x1="90" y1="300" x2="760" y2="300"/>
+            <line class="gridline" x1="90" y1="360" x2="760" y2="360"/>
+          </g>
+
+          <!-- y axis labels -->
+          <g text-anchor="end">
+            <text class="axis-label" x="80" y="64">$1k</text>
+            <text class="axis-label" x="80" y="124">$100</text>
+            <text class="axis-label" x="80" y="184">$10</text>
+            <text class="axis-label" x="80" y="244">$1</text>
+            <text class="axis-label" x="80" y="304">$0.10</text>
+            <text class="axis-label" x="80" y="364">$0.01</text>
+          </g>
+
+          <!-- x axis labels -->
+          <g text-anchor="middle">
+            <text class="axis-label" x="90"  y="384">2022</text>
+            <text class="axis-label" x="258" y="384">2023</text>
+            <text class="axis-label" x="425" y="384">2024</text>
+            <text class="axis-label" x="593" y="384">2025</text>
+            <text class="axis-label" x="760" y="384">2026</text>
+          </g>
+
+          <!-- now marker line -->
+          <line class="nowline" x1="760" y1="60" x2="760" y2="360"/>
+
+          <!-- area + line -->
+          <path d="M 90,105 C 118,112 202,137 258,151 C 313,166 369,178 425,193 C 481,209 537,227 593,243 C 648,259 732,282 760,289 L 760,360 L 90,360 Z" fill="url(#area)"/>
+          <path id="costLine" d="M 90,105 C 118,112 202,137 258,151 C 313,166 369,178 425,193 C 481,209 537,227 593,243 C 648,259 732,282 760,289"/>
+
+          <!-- data points -->
+          <circle class="dot" cx="90"  cy="105" r="3.4"/>
+          <circle class="dot" cx="258" cy="151" r="3.4"/>
+          <circle class="dot" cx="425" cy="193" r="3.4"/>
+          <circle class="dot" cx="593" cy="243" r="3.4"/>
+          <circle cx="760" cy="289" r="5" fill="#F2A93C">
+            <animate attributeName="r" values="5;9;5" dur="2.4s" repeatCount="indefinite"/>
+            <animate attributeName="fill-opacity" values="1;.3;1" dur="2.4s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="760" cy="289" r="3.2" fill="#F2A93C"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- TICKER -->
+  <div class="ticker" aria-label="Representative inference prices">
+    <div class="ticker-track" id="tick">
+      <!-- duplicated in JS for seamless loop -->
+      <div class="tick-set">
+        <div class="tick-item"><span class="sym">FRONTIER · 1M tok</span><span class="px">$0.15</span><span class="dn">▼ 91%</span></div>
+        <div class="tick-item"><span class="sym">OPEN-70B · 1M tok</span><span class="px">$0.09</span><span class="dn">▼ 87%</span></div>
+        <div class="tick-item"><span class="sym">REASONING · 1M tok</span><span class="px">$0.62</span><span class="dn">▼ 78%</span></div>
+        <div class="tick-item"><span class="sym">EMBED · 1M tok</span><span class="px">$0.008</span><span class="dn">▼ 64%</span></div>
+        <div class="tick-item"><span class="sym">VISION · 1k img</span><span class="px">$0.40</span><span class="dn">▼ 71%</span></div>
+        <div class="tick-item"><span class="sym">GPU-HR · spot</span><span class="px">$1.84</span><span class="dn">▼ 38%</span></div>
+        <div class="tick-item"><span class="sym">TOKENS / $ · frontier</span><span class="px">6.7M</span><span class="dn">▲ 11×</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SNAPSHOT -->
+  <section class="sec snapshot" id="snapshot">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="eyebrow">Market snapshot</div>
+        <h2>Where the meter sits today.</h2>
+      </div>
+      <div class="stats reveal">
+        <div class="stat">
+          <div class="lab">Frontier $/Mtok</div>
+          <div class="val">$0.15</div>
+          <div class="delta">▼ 91% YoY</div>
+        </div>
+        <div class="stat">
+          <div class="lab">Open-weight $/Mtok</div>
+          <div class="val">$0.09</div>
+          <div class="delta">▼ 87% YoY</div>
+        </div>
+        <div class="stat">
+          <div class="lab">Cost halving period</div>
+          <div class="val">~5 mo</div>
+          <div class="delta flat">and shrinking</div>
+        </div>
+        <div class="stat">
+          <div class="lab">Tokens per dollar</div>
+          <div class="val">6.7M</div>
+          <div class="delta">▲ 11× YoY</div>
+        </div>
+      </div>
+      <p class="note">// Representative figures for layout — swap in your live dataset before publishing.</p>
+    </div>
+  </section>
+
+  <!-- COVERAGE -->
+  <section class="sec" id="coverage">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="eyebrow">What we cover</div>
+        <h2>Where compute meets the income statement.</h2>
+      </div>
+      <div class="cards">
+        <div class="card reveal">
+          <div class="ix">COST CURVES</div>
+          <h3>Marginal cost of cognition</h3>
+          <p>Token-level cost across frontier and open models, charted over time — and the forces that bend the curve down.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ix">EFFICIENCY</div>
+          <h3>Throughput &amp; utilization</h3>
+          <p>How batching, context length, and accelerator choice decide the real cost of a single request, not the sticker price.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ix">FRONTIER</div>
+          <h3>Price–performance</h3>
+          <p>Capability per dollar as it moves, and where the efficient frontier between cost and quality actually sits.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ix">SUPPLY</div>
+          <h3>Capacity &amp; supply</h3>
+          <p>Accelerator availability, data-center constraints, and the emerging spot market for inference compute.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BRIEFINGS -->
+  <section class="sec briefings" id="briefings">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="eyebrow">Latest</div>
+        <h2>Briefings.</h2>
+      </div>
+      <div class="posts">
+        <a class="post reveal" href="#">
+          <div class="kick">Jun 2026 · <b>Pricing</b></div>
+          <h3>A million tokens now costs less than a coffee</h3>
+          <p>The forces behind another order-of-magnitude drop in inference pricing — and who captures the surplus it creates.</p>
+          <div class="read">Read briefing →</div>
+        </a>
+        <a class="post reveal" href="#">
+          <div class="kick">May 2026 · <b>Infra</b></div>
+          <h3>The utilization gap nobody prices in</h3>
+          <p>Idle accelerators are the hidden tax on inference. A teardown of where the dollars actually leak between request and bill.</p>
+          <div class="read">Read briefing →</div>
+        </a>
+        <a class="post reveal" href="#">
+          <div class="kick">May 2026 · <b>Markets</b></div>
+          <h3>Open weights and the race to zero margin</h3>
+          <p>When the model itself is free, the economics shift to serving it. What that means for anyone building on top.</p>
+          <div class="read">Read briefing →</div>
+        </a>
+      </div>
+      <p class="note">// Sample posts — replace with your own articles or wire up a CMS / markdown feed.</p>
+    </div>
+  </section>
+
+  <!-- SUBSCRIBE -->
+  <section class="sec subscribe" id="subscribe">
+    <div class="wrap">
+      <div class="sub-box reveal">
+        <div class="eyebrow">The briefing</div>
+        <h2>Track the cost of intelligence.</h2>
+        <p>A weekly read on inference pricing, compute supply, and the economics of running AI. No fluff — just the numbers that move.</p>
+        <form class="form" id="subForm" novalidate>
+          <input type="email" id="email" placeholder="you@company.com" aria-label="Email address" required>
+          <button class="btn btn-solid" type="submit">Subscribe</button>
+        </form>
+        <div class="form-msg" id="formMsg" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <div class="serif">Inference<span style="color:var(--amber)">Economics</span></div>
+        <div class="tag">The price of intelligence, tracked.</div>
+      </div>
+      <div class="foot-links">
+        <div class="foot-col">
+          <h4>Research</h4>
+          <a href="#briefings">Briefings</a>
+          <a href="#snapshot">Data &amp; charts</a>
+          <a href="#coverage">Methodology</a>
+        </div>
+        <div class="foot-col">
+          <h4>About</h4>
+          <a href="#">Who we are</a>
+          <a href="#subscribe">Newsletter</a>
+          <a href="#">Contact</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-fine">
+      <span>© 2026 InferenceEconomics</span>
+      <span>Figures shown are illustrative placeholders.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // 1. Draw the cost line on load
+  var line = document.getElementById('costLine');
+  if(line && !reduce){
+    try{
+      var len = line.getTotalLength();
+      line.style.strokeDasharray = len;
+      line.style.strokeDashoffset = len;
+      line.getBoundingClientRect(); // force reflow
+      line.style.transition = 'stroke-dashoffset 2.1s cubic-bezier(.22,1,.36,1)';
+      requestAnimationFrame(function(){ line.style.strokeDashoffset = '0'; });
+    }catch(e){ /* leave fully drawn */ }
+  }
+
+  // 2. Seamless ticker: duplicate the set
+  var track = document.getElementById('tick');
+  if(track){
+    var set = track.querySelector('.tick-set');
+    if(set){ track.appendChild(set.cloneNode(true)); }
+  }
+
+  // 3. Scroll reveal
+  var items = document.querySelectorAll('.reveal');
+  if('IntersectionObserver' in window && !reduce){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); }
+      });
+    },{threshold:.12, rootMargin:'0px 0px -40px 0px'});
+    items.forEach(function(el){ io.observe(el); });
+  } else {
+    items.forEach(function(el){ el.classList.add('in'); });
+  }
+
+  // 4. Subscribe form — local confirmation only (no data is sent anywhere yet)
+  var form = document.getElementById('subForm');
+  var msg = document.getElementById('formMsg');
+  if(form){
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var email = document.getElementById('email').value.trim();
+      var ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      if(!ok){ msg.textContent = '// Enter a valid email address'; return; }
+      msg.textContent = '// Connect an email provider to go live — nothing was sent.';
+      form.reset();
+    });
+  }
+})();
+</script>
+</body>
+</html>
