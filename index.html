@@ -3,115 +3,107 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>InferenceEconomics — Storage costs & model right-sizing</title>
-<meta name="description" content="The storage layer behind inference, and whether a cheaper model can serve most of your prompts." />
+<title>InferenceEconomics — The cost of serving a model, top to bottom</title>
+<meta name="description" content="The full stack of inference cost: compute and model per-token, GPU economics, storage, and network egress." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Inter:wght@400;450;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
   /* ============================================================
-     DESIGN TOKENS  — matched to the InferenceEconomics site:
-     editorial / financial-research, ink on warm paper, hairline
-     rules, mono utility labels, a single deep-petrol accent.
+     DESIGN TOKENS — editorial / financial-research, ink on warm
+     paper, hairline rules, mono utility labels, one petrol accent.
      ============================================================ */
   :root{
-    --paper:#F6F4EF;
-    --surface:#FCFBF8;
-    --ink:#17150F;
-    --muted:#6E6A60;
-    --faint:#9A958B;
-    --rule:#E5E1D7;
-    --rule-2:#D8D3C7;
-    --accent:#0E5A66;        /* deep petrol — links, CTA, highlight */
-    --accent-ink:#0A434C;
-    --pos:#2E7D52;           /* cost falling / savings = good       */
-    --neg:#B23A3A;           /* cost rising / over-spend            */
-    --pos-bg:#E7F1EA;
-    --neg-bg:#F6E7E5;
+    --paper:#F6F4EF; --surface:#FCFBF8;
+    --ink:#17150F; --muted:#6E6A60; --faint:#9A958B;
+    --rule:#E5E1D7; --rule-2:#D8D3C7;
+    --accent:#0E5A66; --accent-ink:#0A434C;
+    --pos:#2E7D52; --neg:#B23A3A; --pos-bg:#E7F1EA; --neg-bg:#F6E7E5;
+    --c-compute:#0E5A66; --c-gpu:#9C6B2E; --c-storage:#7FA9A0; --c-net:#5B6B8C;
     --shadow:0 1px 2px rgba(23,21,15,.04), 0 8px 24px -16px rgba(23,21,15,.18);
-    --serif:'Newsreader', Georgia, 'Times New Roman', serif;
+    --serif:'Newsreader', Georgia, serif;
     --sans:'Inter', system-ui, -apple-system, sans-serif;
-    --mono:'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
     --maxw:1180px;
   }
-
   *,*::before,*::after{box-sizing:border-box}
   html{scroll-behavior:smooth}
   @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-  body{
-    margin:0; background:var(--paper); color:var(--ink);
-    font-family:var(--sans); font-size:16px; line-height:1.55;
-    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
-  }
+  body{margin:0; background:var(--paper); color:var(--ink);
+       font-family:var(--sans); font-size:16px; line-height:1.55;
+       -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility}
   a{color:inherit; text-decoration:none}
   ::selection{background:var(--accent); color:var(--paper)}
   :focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:2px}
-
   .wrap{max-width:var(--maxw); margin:0 auto; padding:0 28px}
-  .mono{font-family:var(--mono)}
-  .tnum{font-variant-numeric:tabular-nums}
+  .mono{font-family:var(--mono)} .tnum{font-variant-numeric:tabular-nums}
 
   /* ---------- header ---------- */
-  .site-head{
-    position:sticky; top:0; z-index:50;
+  .site-head{position:sticky; top:0; z-index:50;
     background:color-mix(in srgb, var(--paper) 88%, transparent);
-    backdrop-filter:saturate(1.2) blur(8px);
-    border-bottom:1px solid var(--rule);
-  }
+    backdrop-filter:saturate(1.2) blur(8px); border-bottom:1px solid var(--rule)}
   .site-head__inner{display:flex; align-items:center; gap:32px; height:64px}
   .brand{font-family:var(--serif); font-size:21px; letter-spacing:-.01em; white-space:nowrap}
-  .brand i{font-style:italic}
-  .brand .dot{color:var(--accent)}
-  .nav{display:flex; gap:26px; margin-left:auto; font-size:13px;
+  .brand i{font-style:italic} .brand .dot{color:var(--accent)}
+  .nav{display:flex; gap:22px; margin-left:auto; font-size:13px;
        font-family:var(--mono); letter-spacing:.04em; color:var(--muted)}
-  .nav a{padding:4px 0; border-bottom:1px solid transparent; transition:color .18s, border-color .18s}
+  .nav a{padding:4px 0; border-bottom:1px solid transparent; transition:.18s}
   .nav a:hover{color:var(--ink); border-color:var(--rule-2)}
-  .btn{
-    font-family:var(--mono); font-size:13px; letter-spacing:.03em;
+  .btn{font-family:var(--mono); font-size:13px; letter-spacing:.03em;
     background:var(--accent); color:var(--paper); padding:9px 16px; border-radius:3px;
-    border:1px solid var(--accent); cursor:pointer; transition:background .18s, transform .05s;
-  }
-  .btn:hover{background:var(--accent-ink)}
-  .btn:active{transform:translateY(1px)}
-  @media (max-width:820px){ .nav{display:none} }
+    border:1px solid var(--accent); cursor:pointer; transition:background .18s, transform .05s}
+  .btn:hover{background:var(--accent-ink)} .btn:active{transform:translateY(1px)}
+  @media (max-width:880px){ .nav{display:none} }
+
+  /* ---------- hero ---------- */
+  .hero{padding:74px 0 30px}
+  .hero h1{font-family:var(--serif); font-weight:500; letter-spacing:-.025em;
+    font-size:clamp(34px,5.4vw,60px); line-height:1.03; margin:.2em 0 .35em; max-width:16ch}
+  .hero h1 em{font-style:italic; color:var(--accent)}
+  .layer-index{list-style:none; display:grid; grid-template-columns:repeat(4,1fr);
+    gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:7px;
+    overflow:hidden; margin:40px 0 0; padding:0; counter-reset:none}
+  .layer-index li{background:var(--surface)}
+  .layer-index a{display:block; padding:18px 18px; transition:background .15s}
+  .layer-index a:hover{background:#fff}
+  .layer-index b{font-family:var(--mono); font-size:12px; color:var(--accent); letter-spacing:.06em}
+  .layer-index .nm{font-family:var(--serif); font-size:18px; margin-top:6px; letter-spacing:-.01em}
+  .layer-index small{display:block; color:var(--faint); font-size:12.5px; font-family:var(--mono); margin-top:3px}
+  @media (max-width:780px){ .layer-index{grid-template-columns:1fr 1fr} }
 
   /* ---------- section scaffold ---------- */
-  .section{padding:96px 0; border-top:1px solid var(--rule)}
-  .section:first-of-type{border-top:none}
-  .eyebrow{
-    font-family:var(--mono); font-size:12px; letter-spacing:.18em;
-    text-transform:uppercase; color:var(--accent); margin:0 0 18px
-  }
-  .h-sec{
-    font-family:var(--serif); font-weight:500; letter-spacing:-.02em;
-    font-size:clamp(30px,4.4vw,46px); line-height:1.06; margin:0 0 18px; max-width:18ch
-  }
+  .section{padding:90px 0; border-top:1px solid var(--rule)}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 18px}
+  .eyebrow .ix{color:var(--faint); margin-right:10px}
+  .h-sec{font-family:var(--serif); font-weight:500; letter-spacing:-.02em;
+    font-size:clamp(29px,4.2vw,44px); line-height:1.07; margin:0 0 18px; max-width:19ch}
   .h-sec em{font-style:italic; color:var(--accent)}
-  .lead{font-size:18px; color:var(--muted); max-width:62ch; margin:0}
+  .lead{font-size:18px; color:var(--muted); max-width:64ch; margin:0}
   .lead b{color:var(--ink); font-weight:600}
-
+  .note{font-size:13.5px; color:var(--muted); font-family:var(--mono); line-height:1.6;
+    border-left:2px solid var(--rule-2); padding-left:14px; margin-top:18px; max-width:70ch}
   .reveal{opacity:0; transform:translateY(16px); transition:opacity .7s ease, transform .7s ease}
   .reveal.in{opacity:1; transform:none}
   @media (prefers-reduced-motion:reduce){ .reveal{opacity:1; transform:none; transition:none} }
 
-  /* ============================================================
-     STORAGE SECTION
-     ============================================================ */
+  /* ---------- metric cards ---------- */
   .cards{display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
-         background:var(--rule); border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-top:48px}
+    background:var(--rule); border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-top:46px}
   .card{background:var(--surface); padding:24px 22px}
   .card__k{font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;
-           text-transform:uppercase; color:var(--muted); margin:0 0 14px}
-  .card__v{font-family:var(--serif); font-size:38px; line-height:1; letter-spacing:-.02em; margin:0}
-  .card__v .u{font-size:15px; color:var(--faint); font-family:var(--mono); letter-spacing:0; margin-left:3px}
+    text-transform:uppercase; color:var(--muted); margin:0 0 14px}
+  .card__v{font-family:var(--serif); font-size:37px; line-height:1; letter-spacing:-.02em; margin:0}
+  .card__v .u{font-size:14px; color:var(--faint); font-family:var(--mono); letter-spacing:0; margin-left:3px}
   .delta{display:inline-flex; align-items:center; gap:5px; margin-top:12px;
-         font-family:var(--mono); font-size:12px; letter-spacing:.02em}
+    font-family:var(--mono); font-size:12px}
   .delta--pos{color:var(--pos)} .delta--neg{color:var(--neg)} .delta--mut{color:var(--faint)}
   @media (max-width:900px){ .cards{grid-template-columns:repeat(2,1fr)} }
   @media (max-width:520px){ .cards{grid-template-columns:1fr} }
 
+  /* ---------- split explainer ---------- */
   .split{display:grid; grid-template-columns:1fr 1fr; gap:1px;
-         background:var(--rule); border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-top:1px}
+    background:var(--rule); border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-top:1px}
   .split__col{background:var(--surface); padding:30px 26px}
   .split__h{font-family:var(--serif); font-size:21px; margin:0 0 4px; letter-spacing:-.01em}
   .split__tag{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin:0 0 14px}
@@ -119,134 +111,115 @@
   .ll{list-style:none; margin:0; padding:0; font-size:14px}
   .ll li{display:flex; justify-content:space-between; gap:18px; padding:9px 0; border-top:1px dotted var(--rule-2)}
   .ll li:first-child{border-top:none}
-  .ll .term{color:var(--ink)}
   .ll .term small{display:block; color:var(--faint); font-size:12px; font-family:var(--mono)}
   .ll .num{font-family:var(--mono); color:var(--muted); white-space:nowrap}
   @media (max-width:760px){ .split{grid-template-columns:1fr} }
 
-  /* shared interactive panel chrome */
+  /* ---------- interactive panel chrome ---------- */
   .panel{background:var(--surface); border:1px solid var(--rule); border-radius:8px; box-shadow:var(--shadow)}
   .panel__bar{display:flex; align-items:baseline; justify-content:space-between; gap:14px;
-              padding:16px 22px; border-bottom:1px solid var(--rule)}
+    padding:16px 22px; border-bottom:1px solid var(--rule)}
   .panel__title{font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
   .panel__note{font-family:var(--mono); font-size:11px; color:var(--faint)}
+  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:0}
+  .col-l{padding:26px 24px; border-right:1px solid var(--rule)}
+  .col-r{padding:26px 24px; display:flex; flex-direction:column}
+  @media (max-width:780px){ .two-col{grid-template-columns:1fr} .col-l{border-right:none; border-bottom:1px solid var(--rule)} }
 
-  .estimator{display:grid; grid-template-columns:1.05fr .95fr; gap:0; margin-top:40px}
-  .estimator .panel__bar{grid-column:1 / -1}
-  .est-controls{padding:26px 24px; border-right:1px solid var(--rule)}
-  .est-out{padding:26px 24px; display:flex; flex-direction:column}
-  @media (max-width:760px){
-    .estimator{grid-template-columns:1fr}
-    .est-controls{border-right:none; border-bottom:1px solid var(--rule)}
-  }
-
-  .field{margin-bottom:20px}
-  .field:last-child{margin-bottom:0}
+  .field{margin-bottom:20px} .field:last-child{margin-bottom:0}
   .field__top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:9px}
   .field__lab{font-size:13.5px; font-weight:500}
   .field__lab small{color:var(--faint); font-weight:400; font-family:var(--mono); font-size:11px; margin-left:6px}
   .field__val{font-family:var(--mono); font-size:13px; color:var(--accent)}
-  input[type=range]{
-    -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
+  input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:3px;
     background:linear-gradient(var(--accent),var(--accent)) no-repeat, var(--rule-2);
-    background-size:var(--fill,50%) 100%; cursor:pointer;
-  }
-  input[type=range]::-webkit-slider-thumb{
-    -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
-    background:var(--surface); border:2px solid var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.18); margin-top:0;
-  }
-  input[type=range]::-moz-range-thumb{
-    width:14px; height:14px; border-radius:50%; background:var(--surface);
-    border:2px solid var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.18)
-  }
+    background-size:var(--fill,50%) 100%; cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+    background:var(--surface); border:2px solid var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  input[type=range]::-moz-range-thumb{width:14px; height:14px; border-radius:50%; background:var(--surface);
+    border:2px solid var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.18)}
   input[type=range]::-moz-range-track{height:3px; background:var(--rule-2); border-radius:3px}
 
-  /* stacked storage bar */
-  .stackbar{display:flex; height:34px; border-radius:5px; overflow:hidden; border:1px solid var(--rule); margin:8px 0 14px}
-  .stackbar .seg{height:100%; transition:width .45s ease}
-  .seg--model{background:var(--accent)}
-  .seg--data{background:#7FA9A0}
-  .seg--vector{background:#C8A24B}
-  .legend{display:flex; flex-wrap:wrap; gap:16px 22px; font-family:var(--mono); font-size:12px; color:var(--muted)}
-  .legend span{display:inline-flex; align-items:center; gap:7px}
-  .swatch{width:11px; height:11px; border-radius:2px; display:inline-block}
-  .est-total{margin-top:auto; padding-top:18px; border-top:1px solid var(--rule);
-             display:flex; align-items:baseline; justify-content:space-between}
-  .est-total .lbl{font-family:var(--mono); font-size:12px; letter-spacing:.04em; color:var(--muted); text-transform:uppercase}
-  .est-total .amt{font-family:var(--serif); font-size:34px; letter-spacing:-.02em}
-
-  /* ============================================================
-     RIGHT-SIZE SECTION
-     ============================================================ */
-  .sizer{display:grid; grid-template-columns:.92fr 1.08fr; gap:0; margin-top:44px}
-  .sizer .panel__bar{grid-column:1 / -1}
-  .sz-controls{padding:28px 26px; border-right:1px solid var(--rule)}
-  .sz-results{padding:28px 26px; background:linear-gradient(180deg, color-mix(in srgb,var(--accent) 4%,var(--surface)), var(--surface))}
-  @media (max-width:860px){
-    .sizer{grid-template-columns:1fr}
-    .sz-controls{border-right:none; border-bottom:1px solid var(--rule)}
-  }
-
   .seg-group{display:flex; flex-wrap:wrap; gap:6px}
-  .seg-btn{
-    font-family:var(--mono); font-size:12px; letter-spacing:.02em; color:var(--muted);
-    background:var(--paper); border:1px solid var(--rule-2); border-radius:4px;
-    padding:7px 11px; cursor:pointer; transition:all .15s
-  }
+  .seg-btn{font-family:var(--mono); font-size:12px; color:var(--muted); background:var(--paper);
+    border:1px solid var(--rule-2); border-radius:4px; padding:7px 11px; cursor:pointer; transition:.15s}
   .seg-btn:hover{border-color:var(--accent); color:var(--ink)}
   .seg-btn[aria-pressed=true]{background:var(--accent); color:var(--paper); border-color:var(--accent)}
 
+  /* big readout + formula */
+  .readout{margin-bottom:18px}
+  .readout__k{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px}
+  .readout__v{font-family:var(--serif); font-size:52px; line-height:1; letter-spacing:-.03em; margin:0}
+  .readout__v .u{font-size:16px; font-family:var(--mono); color:var(--faint); letter-spacing:0; margin-left:5px}
+  .formula{font-family:var(--mono); font-size:12px; color:var(--muted); background:var(--paper);
+    border:1px solid var(--rule); border-radius:5px; padding:11px 13px; margin:4px 0 18px; line-height:1.5}
+  .formula b{color:var(--accent)}
+  .mini-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--rule);
+    border:1px solid var(--rule); border-radius:6px; overflow:hidden}
+  .mini{background:var(--surface); padding:15px 14px}
+  .mini__k{font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 8px}
+  .mini__v{font-family:var(--serif); font-size:23px; letter-spacing:-.02em; line-height:1; margin:0}
+  @media (max-width:520px){ .mini-grid{grid-template-columns:1fr} }
+
+  /* stacked bars + legend */
+  .stackbar{display:flex; height:34px; border-radius:5px; overflow:hidden; border:1px solid var(--rule); margin:8px 0 14px}
+  .stackbar .seg{height:100%; transition:width .45s ease}
+  .legend{display:flex; flex-wrap:wrap; gap:14px 22px; font-family:var(--mono); font-size:12px; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:7px}
+  .swatch{width:11px; height:11px; border-radius:2px; display:inline-block}
+  .est-total{margin-top:auto; padding-top:18px; border-top:1px solid var(--rule);
+    display:flex; align-items:baseline; justify-content:space-between}
+  .est-total .lbl{font-family:var(--mono); font-size:12px; letter-spacing:.04em; color:var(--muted); text-transform:uppercase}
+  .est-total .amt{font-family:var(--serif); font-size:34px; letter-spacing:-.02em}
+
+  /* compute / right-size specifics */
   .mix-row{display:grid; grid-template-columns:118px 1fr 46px; align-items:center; gap:12px; margin-bottom:14px}
   .mix-row__lab{font-size:13.5px; font-weight:500}
   .mix-row__lab small{display:block; color:var(--faint); font-family:var(--mono); font-size:10.5px; line-height:1.3; font-weight:400}
   .mix-row__pct{font-family:var(--mono); font-size:13px; color:var(--accent); text-align:right}
-
-  .verdict{
-    border:1px solid var(--rule); border-left:3px solid var(--pos);
-    background:var(--pos-bg); border-radius:6px; padding:18px 20px; margin-bottom:22px
-  }
+  .verdict{border:1px solid var(--rule); border-left:3px solid var(--pos); background:var(--pos-bg);
+    border-radius:6px; padding:18px 20px; margin-bottom:22px}
   .verdict.is-over{border-left-color:var(--neg); background:var(--neg-bg)}
   .verdict__tag{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--pos); margin:0 0 6px}
   .verdict.is-over .verdict__tag{color:var(--neg)}
-  .verdict__txt{font-size:15.5px; margin:0; line-height:1.5}
-  .verdict__txt b{font-weight:600}
-
+  .verdict__txt{font-size:15.5px; margin:0; line-height:1.5} .verdict__txt b{font-weight:600}
   .res-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--rule);
-            border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-bottom:22px}
+    border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-bottom:22px}
   .res{background:var(--surface); padding:18px 16px}
   .res__k{font-family:var(--mono); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
   .res__v{font-family:var(--serif); font-size:28px; letter-spacing:-.02em; line-height:1; margin:0}
-  .res--save{background:var(--pos-bg)}
-  .res--save .res__v{color:var(--pos)}
+  .res--save{background:var(--pos-bg)} .res--save .res__v{color:var(--pos)}
   @media (max-width:520px){ .res-grid{grid-template-columns:1fr} }
-
-  /* routing table */
   .rt{width:100%; border-collapse:collapse; font-size:13.5px; margin-bottom:8px}
   .rt th{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
-         text-align:left; font-weight:500; padding:0 10px 10px; border-bottom:1px solid var(--rule-2)}
+    text-align:left; font-weight:500; padding:0 10px 10px; border-bottom:1px solid var(--rule-2)}
   .rt th.r,.rt td.r{text-align:right}
   .rt td{padding:11px 10px; border-bottom:1px dotted var(--rule)}
   .rt tr:last-child td{border-bottom:none}
   .rt .model{font-family:var(--mono); font-size:12.5px}
   .pill{display:inline-block; font-family:var(--mono); font-size:10.5px; padding:2px 7px; border-radius:20px;
-        border:1px solid var(--rule-2); color:var(--muted); margin-left:8px; vertical-align:middle}
+    border:1px solid var(--rule-2); color:var(--muted); margin-left:8px; vertical-align:middle}
   .pill--def{background:var(--accent); color:var(--paper); border-color:var(--accent)}
-
-  /* efficient-frontier mini chart */
-  .frontier{margin-top:6px}
   .frontier figcaption{font-family:var(--mono); font-size:11px; color:var(--faint); margin-top:8px; text-align:center}
-  .grand-total{display:flex; align-items:baseline; justify-content:space-between; gap:14px;
-               margin-top:22px; padding-top:18px; border-top:1px solid var(--rule); flex-wrap:wrap}
-  .grand-total .lbl{font-size:14px; color:var(--muted)}
-  .grand-total .lbl b{color:var(--ink)}
-  .grand-total .amt{font-family:var(--serif); font-size:30px; letter-spacing:-.02em}
-  .grand-total .amt small{font-family:var(--mono); font-size:12px; color:var(--faint); margin-left:8px}
+  .ro-line{display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+    font-size:13.5px; padding:10px 12px; background:var(--paper); border:1px solid var(--rule); border-radius:5px; margin-bottom:18px}
+  .ro-line .l{color:var(--muted)} .ro-line .v{font-family:var(--mono); color:var(--ink)}
+
+  /* ---------- cost-stack total ---------- */
+  .total-band{background:var(--ink); color:#F1EEE6; border-radius:10px; padding:38px 34px; margin-top:48px}
+  .total-band .eyebrow{color:#C8A24B}
+  .total-band .stackbar{border-color:rgba(255,255,255,.14); margin-top:18px}
+  .total-band .legend{color:#B9B3A6}
+  .tb-grand{display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    margin-top:24px; padding-top:22px; border-top:1px solid rgba(255,255,255,.14)}
+  .tb-grand .lbl{font-size:15px; color:#B9B3A6} .tb-grand .lbl b{color:#F1EEE6}
+  .tb-grand .amt{font-family:var(--serif); font-size:46px; letter-spacing:-.025em; line-height:1}
+  .tb-note{font-family:var(--mono); font-size:12px; color:#8F897C; margin-top:18px; line-height:1.6}
 
   /* ---------- footer ---------- */
-  .foot{border-top:1px solid var(--rule); padding:54px 0 60px; margin-top:8px}
+  .foot{border-top:1px solid var(--rule); padding:54px 0 60px}
   .foot__top{display:flex; gap:40px; flex-wrap:wrap; align-items:flex-start}
-  .foot__brand{font-family:var(--serif); font-size:20px}
-  .foot__brand i{font-style:italic}
+  .foot__brand{font-family:var(--serif); font-size:20px} .foot__brand i{font-style:italic}
   .foot__tag{color:var(--muted); font-size:14px; margin-top:6px; max-width:30ch}
   .foot__cols{display:flex; gap:56px; margin-left:auto; flex-wrap:wrap}
   .foot__h{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin:0 0 12px}
@@ -254,7 +227,7 @@
   .foot__cols a:hover{color:var(--ink)}
   .foot__rule{border:none; border-top:1px solid var(--rule); margin:36px 0 18px}
   .foot__fine{display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
-              font-family:var(--mono); font-size:11.5px; color:var(--faint)}
+    font-family:var(--mono); font-size:11.5px; color:var(--faint)}
 </style>
 </head>
 <body>
@@ -264,239 +237,272 @@
   <div class="wrap site-head__inner">
     <a class="brand" href="#top">Inference<i>Economics</i><span class="dot">.</span></a>
     <nav class="nav">
+      <a href="#compute">COMPUTE</a>
+      <a href="#gpu">GPU</a>
       <a href="#storage">STORAGE</a>
-      <a href="#rightsize">RIGHT-SIZING</a>
-      <a href="#briefings">BRIEFINGS</a>
-      <a href="#data">DATA</a>
+      <a href="#network">NETWORK</a>
+      <a href="#total">TOTAL</a>
     </nav>
-    <button class="btn" onclick="document.getElementById('rightsize').scrollIntoView()">Try the tool →</button>
+    <button class="btn" onclick="document.getElementById('compute').scrollIntoView()">Open the model →</button>
   </div>
 </header>
 
 <main id="top">
+  <!-- ====================== HERO ====================== -->
+  <section class="hero">
+    <div class="wrap reveal">
+      <p class="eyebrow">Total cost of inference</p>
+      <h1>The price of serving a model, <em>top to bottom</em>.</h1>
+      <p class="lead">The number most teams watch is the <b>per-token</b> price. But that's only the top of the stack. Underneath sit the <b>GPUs</b> that produce it, the <b>storage</b> for weights and retrieval, and the <b>network</b> moving bytes in and out. Walk down each layer — every panel is live, and they sum to a full cost to serve at the bottom.</p>
+      <ol class="layer-index">
+        <li><a href="#compute"><b>01</b><div class="nm">Compute &amp; model</div><small>price per token</small></a></li>
+        <li><a href="#gpu"><b>02</b><div class="nm">GPU</div><small>the supply side</small></a></li>
+        <li><a href="#storage"><b>03</b><div class="nm">Storage</div><small>weights · data · RAG</small></a></li>
+        <li><a href="#network"><b>04</b><div class="nm">Network</div><small>ingress &amp; egress</small></a></li>
+      </ol>
+    </div>
+  </section>
 
-  <!-- ====================== STORAGE COSTS ====================== -->
+  <!-- ====================== 01 · COMPUTE & MODEL (per token) ====================== -->
+  <section class="section" id="compute">
+    <div class="wrap">
+      <div class="reveal">
+        <p class="eyebrow"><span class="ix">01</span>Compute &amp; model · price per token</p>
+        <h2 class="h-sec">Most teams overpay by running <em>every prompt</em> on one frontier model.</h2>
+        <p class="lead">This is the top-line bill: what you pay per token for the model to think. Describe your traffic, and this routes each slice of prompts to the cheapest model that can still handle it — then shows what you'd save versus running everything on your current choice.</p>
+      </div>
+
+      <div class="two-col panel reveal">
+        <div class="panel__bar">
+          <span class="panel__title">Model right-sizing</span>
+          <span class="panel__note">// blended $/Mtok — illustrative ladder</span>
+        </div>
+        <div class="col-l">
+          <div class="field">
+            <div class="field__top"><span class="field__lab">Monthly prompts</span><span class="field__val" id="v-volume">2,000,000</span></div>
+            <input type="range" id="s-volume" min="0" max="100" step="1" value="50" />
+          </div>
+          <div class="field">
+            <div class="field__top"><span class="field__lab">Avg tokens / prompt <small>in + out</small></span><span class="field__val" id="v-tokens">1,500</span></div>
+            <input type="range" id="s-tokens" min="200" max="8000" step="100" value="1500" />
+          </div>
+          <div class="field">
+            <div class="field__top" style="margin-bottom:12px"><span class="field__lab">Prompt mix <small>relative share</small></span></div>
+            <div class="mix-row"><span class="mix-row__lab">Simple<small>classify · extract · short Q&amp;A</small></span><input type="range" id="s-simple" min="0" max="100" step="1" value="45" /><span class="mix-row__pct" id="v-simple">45%</span></div>
+            <div class="mix-row"><span class="mix-row__lab">Moderate<small>summaries · drafting · chat</small></span><input type="range" id="s-moderate" min="0" max="100" step="1" value="40" /><span class="mix-row__pct" id="v-moderate">40%</span></div>
+            <div class="mix-row"><span class="mix-row__lab">Complex<small>reasoning · hard code · analysis</small></span><input type="range" id="s-complex" min="0" max="100" step="1" value="15" /><span class="mix-row__pct" id="v-complex">15%</span></div>
+          </div>
+          <div class="field">
+            <div class="field__top" style="margin-bottom:11px"><span class="field__lab">Current model <small>used for everything today</small></span></div>
+            <div class="seg-group" id="model-group"></div>
+          </div>
+        </div>
+        <div class="col-r" style="background:linear-gradient(180deg, color-mix(in srgb,var(--accent) 4%,var(--surface)), var(--surface))">
+          <div class="verdict" id="verdict" aria-live="polite">
+            <p class="verdict__tag" id="verdict-tag">Assessment</p>
+            <p class="verdict__txt" id="verdict-txt">—</p>
+          </div>
+          <div class="res-grid">
+            <div class="res"><p class="res__k">Current / mo</p><p class="res__v tnum" id="r-current">$—</p></div>
+            <div class="res"><p class="res__k">Right-sized / mo</p><p class="res__v tnum" id="r-right">$—</p></div>
+            <div class="res res--save"><p class="res__k">You'd save</p><p class="res__v tnum" id="r-save">—</p></div>
+          </div>
+          <table class="rt"><thead><tr><th>Slice</th><th>Routed to</th><th class="r">Share</th><th class="r">Cost / mo</th></tr></thead><tbody id="rt-body"></tbody></table>
+          <figure class="frontier" style="margin:6px 0 0">
+            <svg id="frontier-svg" viewBox="0 0 520 200" width="100%" role="img" aria-label="Price versus capability per model"></svg>
+            <figcaption>Price (log) vs capability · ◯ current · ● recommended default</figcaption>
+          </figure>
+        </div>
+      </div>
+      <p class="note">This per-token figure is your compute bill if you buy API tokens. If you self-host, the same number is produced by GPU economics — that's layer 02.</p>
+    </div>
+  </section>
+
+  <!-- ====================== 02 · GPU ====================== -->
+  <section class="section" id="gpu">
+    <div class="wrap">
+      <div class="reveal">
+        <p class="eyebrow"><span class="ix">02</span>GPU · the supply side</p>
+        <h2 class="h-sec">Every per-token price is just a <em>GPU-hour</em> divided by throughput.</h2>
+        <p class="lead">Behind the token price is a rented accelerator billed by the hour. What turns $/hour into $/token is <b>throughput</b> (tokens per second) and <b>utilization</b> — and utilization is the lever almost everyone leaves on the table. An idle GPU still bills full price.</p>
+      </div>
+
+      <div class="two-col panel reveal">
+        <div class="panel__bar">
+          <span class="panel__title">GPU → token cost</span>
+          <span class="panel__note">// on-demand $/hr — illustrative</span>
+        </div>
+        <div class="col-l">
+          <div class="field">
+            <div class="field__top" style="margin-bottom:11px"><span class="field__lab">Accelerator <small>on-demand $/hr</small></span></div>
+            <div class="seg-group" id="gpu-group"></div>
+          </div>
+          <div class="field">
+            <div class="field__top"><span class="field__lab">Throughput <small>tokens / sec, your model</small></span><span class="field__val" id="v-tput">3,000 tok/s</span></div>
+            <input type="range" id="s-tput" min="200" max="20000" step="100" value="3000" />
+          </div>
+          <div class="field">
+            <div class="field__top"><span class="field__lab">Utilization <small>share of time serving</small></span><span class="field__val" id="v-util">40%</span></div>
+            <input type="range" id="s-util" min="5" max="95" step="1" value="40" />
+          </div>
+          <div class="field">
+            <div class="field__top"><span class="field__lab">Fleet size <small>GPUs, always-on</small></span><span class="field__val" id="v-fleet">×8</span></div>
+            <input type="range" id="s-fleet" min="1" max="64" step="1" value="8" />
+          </div>
+        </div>
+        <div class="col-r">
+          <div class="readout">
+            <p class="readout__k">Effective cost per token</p>
+            <p class="readout__v tnum"><span id="gpu-permtok">$0.00</span><span class="u">/Mtok</span></p>
+          </div>
+          <div class="formula">$/Mtok = <b>GPU $/hr</b> ÷ ( <b>tok/s</b> × 3600 × <b>utilization</b> ) × 10⁶</div>
+          <div class="mini-grid">
+            <div class="mini"><p class="mini__k">Fleet / mo</p><p class="mini__v tnum" id="gpu-fleet-cost">$—</p></div>
+            <div class="mini"><p class="mini__k">Capacity</p><p class="mini__v tnum" id="gpu-capacity">—</p></div>
+            <div class="mini"><p class="mini__k">Break-even util*</p><p class="mini__v tnum" id="gpu-breakeven">—</p></div>
+          </div>
+          <p class="note" style="margin-top:18px">*Utilization needed to undercut a $0.30/Mtok API price at this throughput. Below it, renting tokens is cheaper than self-hosting.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== 03 · STORAGE ====================== -->
   <section class="section" id="storage">
     <div class="wrap">
       <div class="reveal">
-        <p class="eyebrow">Storage · the layer under the meter</p>
+        <p class="eyebrow"><span class="ix">03</span>Storage · weights, data &amp; retrieval</p>
         <h2 class="h-sec">Compute gets the headline. <em>Storage</em> gets the recurring bill.</h2>
-        <p class="lead">Inference pricing tracks the <b>per-token</b> cost of thinking. But every served model also sits on top of bytes that cost money every month — the <b>weights at rest</b>, the <b>retrieval index</b> behind RAG, and the <b>logs</b> that grow with every request. Here's where those dollars sit, and a quick estimate for your own footprint.</p>
+        <p class="lead">The weights themselves are cheap to keep at rest. What bends the curve is the <b>retrieval index</b> behind RAG and the <b>logs</b> that grow with every request. Here's where those dollars sit, and a live estimate for your footprint.</p>
       </div>
 
-      <!-- headline storage metrics -->
       <div class="cards reveal">
-        <div class="card">
-          <p class="card__k">Model weights at rest</p>
-          <p class="card__v">$0.021<span class="u">/GB·mo</span></p>
-          <span class="delta delta--mut">▪ object storage, ×replicas</span>
-        </div>
-        <div class="card">
-          <p class="card__k">Vector store / RAG</p>
-          <p class="card__v">$0.28<span class="u">/GB·mo</span></p>
-          <span class="delta delta--neg">▲ 13× the at-rest rate</span>
-        </div>
-        <div class="card">
-          <p class="card__k">Logs &amp; traces</p>
-          <p class="card__v">$0.021<span class="u">/GB·mo</span></p>
-          <span class="delta delta--neg">▲ scales with volume</span>
-        </div>
-        <div class="card">
-          <p class="card__k">Storage share of TCO</p>
-          <p class="card__v">1–8<span class="u">%</span></p>
-          <span class="delta delta--mut">▪ higher for RAG / long-context</span>
-        </div>
+        <div class="card"><p class="card__k">Model weights at rest</p><p class="card__v">$0.021<span class="u">/GB·mo</span></p><span class="delta delta--mut">▪ object storage, ×replicas</span></div>
+        <div class="card"><p class="card__k">Vector store / RAG</p><p class="card__v">$0.28<span class="u">/GB·mo</span></p><span class="delta delta--neg">▲ 13× the at-rest rate</span></div>
+        <div class="card"><p class="card__k">Logs &amp; traces</p><p class="card__v">$0.021<span class="u">/GB·mo</span></p><span class="delta delta--neg">▲ scales with volume</span></div>
+        <div class="card"><p class="card__k">Storage share of TCO</p><p class="card__v">1–8<span class="u">%</span></p><span class="delta delta--mut">▪ higher for RAG</span></div>
       </div>
 
-      <!-- model vs data split -->
       <div class="split reveal">
         <div class="split__col">
           <p class="split__tag">Model storage</p>
           <h3 class="split__h">Storing the brain</h3>
-          <p class="split__p">The weights themselves are cheap to keep, but you pay for every copy — one per region, plus warm load caches and rollback versions.</p>
+          <p class="split__p">Weights are cheap, but you pay for every copy — one per region, plus warm-load caches and rollback versions.</p>
           <ul class="ll">
             <li><span class="term">Weights at rest <small>70B · fp16 ≈ 140 GB</small></span><span class="num">~$2.94 / mo</span></li>
             <li><span class="term">Replication <small>×3 regions</small></span><span class="num">~$8.82 / mo</span></li>
-            <li><span class="term">Version &amp; rollback cache <small>previous checkpoints</small></span><span class="num">~$4–10 / mo</span></li>
+            <li><span class="term">Version cache <small>previous checkpoints</small></span><span class="num">~$4–10 / mo</span></li>
             <li><span class="term">KV cache <small>ephemeral · billed as compute</small></span><span class="num">in GPU mem</span></li>
           </ul>
         </div>
         <div class="split__col">
           <p class="split__tag">Data storage</p>
           <h3 class="split__h">Storing the context</h3>
-          <p class="split__p">This is where storage actually bends the curve. Retrieval indexes and request logs are persistent, queried constantly, and grow with usage.</p>
+          <p class="split__p">This is where storage actually bites — retrieval indexes and logs are persistent, queried constantly, and grow with usage.</p>
           <ul class="ll">
             <li><span class="term">Customer data at rest <small>blobs, documents</small></span><span class="num">$0.021 / GB·mo</span></li>
             <li><span class="term">Vector index <small>embeddings for RAG</small></span><span class="num">$0.28 / GB·mo</span></li>
-            <li><span class="term">Request / response logs <small>audit, eval, fine-tune</small></span><span class="num">$0.021 / GB·mo</span></li>
+            <li><span class="term">Request / response logs <small>audit, eval, tuning</small></span><span class="num">$0.021 / GB·mo</span></li>
             <li><span class="term">Hot cache <small>dedup &amp; prompt cache</small></span><span class="num">$0.10 / GB·mo</span></li>
           </ul>
         </div>
       </div>
 
-      <!-- interactive storage estimator -->
-      <div class="estimator panel reveal">
-        <div class="panel__bar">
-          <span class="panel__title">Storage estimator</span>
-          <span class="panel__note">// illustrative rates — edit RATES{} in the source</span>
+      <div class="two-col panel reveal">
+        <div class="panel__bar"><span class="panel__title">Storage estimator</span><span class="panel__note">// illustrative rates</span></div>
+        <div class="col-l">
+          <div class="field"><div class="field__top"><span class="field__lab">Model weights <small>GB, all served</small></span><span class="field__val" id="v-weights">140 GB</span></div><input type="range" id="s-weights" min="10" max="700" step="5" value="140" /></div>
+          <div class="field"><div class="field__top"><span class="field__lab">Replicas / regions</span><span class="field__val" id="v-replicas">×3</span></div><input type="range" id="s-replicas" min="1" max="6" step="1" value="3" /></div>
+          <div class="field"><div class="field__top"><span class="field__lab">Data &amp; logs at rest <small>GB</small></span><span class="field__val" id="v-data">600 GB</span></div><input type="range" id="s-data" min="0" max="5000" step="50" value="600" /></div>
+          <div class="field"><div class="field__top"><span class="field__lab">Vector store <small>GB, RAG index</small></span><span class="field__val" id="v-vector">80 GB</span></div><input type="range" id="s-vector" min="0" max="1000" step="10" value="80" /></div>
         </div>
-        <div class="est-controls">
-          <div class="field">
-            <div class="field__top">
-              <span class="field__lab">Model weights <small>GB, all served models</small></span>
-              <span class="field__val" id="v-weights">140 GB</span>
-            </div>
-            <input type="range" id="s-weights" min="10" max="700" step="5" value="140" />
-          </div>
-          <div class="field">
-            <div class="field__top">
-              <span class="field__lab">Replicas / regions</span>
-              <span class="field__val" id="v-replicas">×3</span>
-            </div>
-            <input type="range" id="s-replicas" min="1" max="6" step="1" value="3" />
-          </div>
-          <div class="field">
-            <div class="field__top">
-              <span class="field__lab">Data &amp; logs at rest <small>GB</small></span>
-              <span class="field__val" id="v-data">600 GB</span>
-            </div>
-            <input type="range" id="s-data" min="0" max="5000" step="50" value="600" />
-          </div>
-          <div class="field">
-            <div class="field__top">
-              <span class="field__lab">Vector store <small>GB, RAG index</small></span>
-              <span class="field__val" id="v-vector">80 GB</span>
-            </div>
-            <input type="range" id="s-vector" min="0" max="1000" step="10" value="80" />
-          </div>
-        </div>
-        <div class="est-out">
-          <div class="stackbar" id="stackbar">
-            <div class="seg seg--model" id="seg-model"></div>
-            <div class="seg seg--data" id="seg-data"></div>
-            <div class="seg seg--vector" id="seg-vector"></div>
-          </div>
+        <div class="col-r">
+          <div class="stackbar"><div class="seg" id="seg-s-model" style="background:var(--c-storage)"></div><div class="seg" id="seg-s-data" style="background:#A9C3BC"></div><div class="seg" id="seg-s-vector" style="background:#C8A24B"></div></div>
           <div class="legend">
-            <span><i class="swatch seg--model"></i> Model <b class="mono" id="leg-model" style="margin-left:4px">—</b></span>
-            <span><i class="swatch seg--data"></i> Data &amp; logs <b class="mono" id="leg-data" style="margin-left:4px">—</b></span>
-            <span><i class="swatch seg--vector"></i> Vectors <b class="mono" id="leg-vector" style="margin-left:4px">—</b></span>
+            <span><i class="swatch" style="background:var(--c-storage)"></i> Model <b class="mono" id="leg-s-model" style="margin-left:4px">—</b></span>
+            <span><i class="swatch" style="background:#A9C3BC"></i> Data &amp; logs <b class="mono" id="leg-s-data" style="margin-left:4px">—</b></span>
+            <span><i class="swatch" style="background:#C8A24B"></i> Vectors <b class="mono" id="leg-s-vector" style="margin-left:4px">—</b></span>
           </div>
-          <div class="est-total">
-            <span class="lbl">Monthly storage</span>
-            <span class="amt tnum" id="storage-total">$—</span>
-          </div>
+          <div class="est-total"><span class="lbl">Monthly storage</span><span class="amt tnum" id="storage-total">$—</span></div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ====================== RIGHT-SIZE THE MODEL ====================== -->
-  <section class="section" id="rightsize">
+  <!-- ====================== 04 · NETWORK ====================== -->
+  <section class="section" id="network">
     <div class="wrap">
       <div class="reveal">
-        <p class="eyebrow">Price–performance · the efficient frontier</p>
-        <h2 class="h-sec">Could a <em>cheaper model</em> serve most of your prompts?</h2>
-        <p class="lead">Most teams run every request on one frontier model — and overpay on the easy ones. Describe your traffic, and this routes each slice of prompts to the cheapest model that can still handle it, then shows what you'd save versus running everything on your current choice.</p>
+        <p class="eyebrow"><span class="ix">04</span>Network · ingress &amp; egress</p>
+        <h2 class="h-sec">Data in is free. Data <em>out</em> is the tax at the bottom of the bill.</h2>
+        <p class="lead">Clouds wave data in (<b>ingress</b>) through the door for free, then meter every byte that leaves (<b>egress</b>). For text token streaming this is usually tiny — but flip the workload to images, audio, or video and egress can overtake everything above it. Cross-region replication is its own line.</p>
       </div>
 
-      <div class="sizer panel reveal">
-        <div class="panel__bar">
-          <span class="panel__title">Model right-sizing</span>
-          <span class="panel__note">// blended $/Mtok — illustrative ladder</span>
+      <div class="cards reveal">
+        <div class="card"><p class="card__k">Egress (data out)</p><p class="card__v">$0.09<span class="u">/GB</span></p><span class="delta delta--neg">▲ the metered direction</span></div>
+        <div class="card"><p class="card__k">Ingress (data in)</p><p class="card__v">$0.00<span class="u">/GB</span></p><span class="delta delta--pos">▼ typically free</span></div>
+        <div class="card"><p class="card__k">Cross-region</p><p class="card__v">$0.02<span class="u">/GB</span></p><span class="delta delta--mut">▪ replication &amp; sync</span></div>
+        <div class="card"><p class="card__k">Egress share of bill</p><p class="card__v tnum" id="net-share">—</p><span class="delta delta--mut" id="net-share-note">▪ depends on payload</span></div>
+      </div>
+
+      <div class="two-col panel reveal">
+        <div class="panel__bar"><span class="panel__title">Egress estimator</span><span class="panel__note">// illustrative payloads &amp; rates</span></div>
+        <div class="col-l">
+          <div class="ro-line"><span class="l">Monthly responses</span><span class="v" id="v-net-vol">2,000,000</span></div>
+          <div class="field">
+            <div class="field__top" style="margin-bottom:11px"><span class="field__lab">Response payload <small>avg size out</small></span></div>
+            <div class="seg-group" id="payload-group"></div>
+          </div>
+          <div class="field"><div class="field__top"><span class="field__lab">Cross-region transfer <small>GB / mo</small></span><span class="field__val" id="v-xregion">200 GB</span></div><input type="range" id="s-xregion" min="0" max="5000" step="50" value="200" /></div>
+          <p class="note">Response count tracks your monthly prompts from layer 01 — change it there and this moves with it.</p>
         </div>
-
-        <!-- controls -->
-        <div class="sz-controls">
-          <div class="field">
-            <div class="field__top">
-              <span class="field__lab">Monthly prompts</span>
-              <span class="field__val" id="v-volume">2,000,000</span>
-            </div>
-            <input type="range" id="s-volume" min="0" max="100" step="1" value="50" />
+        <div class="col-r">
+          <div class="readout">
+            <p class="readout__k">Monthly egress</p>
+            <p class="readout__v tnum" id="net-cost">$—</p>
           </div>
-          <div class="field">
-            <div class="field__top">
-              <span class="field__lab">Avg tokens / prompt <small>in + out</small></span>
-              <span class="field__val" id="v-tokens">1,500</span>
-            </div>
-            <input type="range" id="s-tokens" min="200" max="8000" step="100" value="1500" />
+          <div class="mini-grid">
+            <div class="mini"><p class="mini__k">Streaming out</p><p class="mini__v tnum" id="net-gb">—</p></div>
+            <div class="mini"><p class="mini__k">Cross-region</p><p class="mini__v tnum" id="net-xgb">—</p></div>
+            <div class="mini"><p class="mini__k">Ingress</p><p class="mini__v">free</p></div>
           </div>
-
-          <div class="field">
-            <div class="field__top" style="margin-bottom:12px">
-              <span class="field__lab">Prompt mix <small>relative share</small></span>
-            </div>
-            <div class="mix-row">
-              <span class="mix-row__lab">Simple<small>classify · extract · short Q&amp;A</small></span>
-              <input type="range" id="s-simple" min="0" max="100" step="1" value="45" />
-              <span class="mix-row__pct" id="v-simple">45%</span>
-            </div>
-            <div class="mix-row">
-              <span class="mix-row__lab">Moderate<small>summaries · drafting · chat</small></span>
-              <input type="range" id="s-moderate" min="0" max="100" step="1" value="40" />
-              <span class="mix-row__pct" id="v-moderate">40%</span>
-            </div>
-            <div class="mix-row">
-              <span class="mix-row__lab">Complex<small>reasoning · hard code · analysis</small></span>
-              <input type="range" id="s-complex" min="0" max="100" step="1" value="15" />
-              <span class="mix-row__pct" id="v-complex">15%</span>
-            </div>
-          </div>
-
-          <div class="field">
-            <div class="field__top" style="margin-bottom:11px">
-              <span class="field__lab">Current model <small>used for everything today</small></span>
-            </div>
-            <div class="seg-group" id="model-group"></div>
-          </div>
+          <p class="note" style="margin-top:18px">Try switching the payload to Image or Video — text is bytes, media is megabytes, and egress scales with it.</p>
         </div>
+      </div>
+    </div>
+  </section>
 
-        <!-- results -->
-        <div class="sz-results">
-          <div class="verdict" id="verdict" aria-live="polite">
-            <p class="verdict__tag" id="verdict-tag">Assessment</p>
-            <p class="verdict__txt" id="verdict-txt">—</p>
-          </div>
-
-          <div class="res-grid">
-            <div class="res">
-              <p class="res__k">Current / mo</p>
-              <p class="res__v tnum" id="r-current">$—</p>
-            </div>
-            <div class="res">
-              <p class="res__k">Right-sized / mo</p>
-              <p class="res__v tnum" id="r-right">$—</p>
-            </div>
-            <div class="res res--save">
-              <p class="res__k">You'd save</p>
-              <p class="res__v tnum" id="r-save">—</p>
-            </div>
-          </div>
-
-          <table class="rt">
-            <thead>
-              <tr><th>Slice</th><th>Routed to</th><th class="r">Share</th><th class="r">Cost / mo</th></tr>
-            </thead>
-            <tbody id="rt-body"></tbody>
-          </table>
-
-          <figure class="frontier">
-            <svg id="frontier-svg" viewBox="0 0 520 200" width="100%" role="img"
-                 aria-label="Price versus capability for each model, with current and recommended highlighted"></svg>
-            <figcaption>Price (log) vs capability · ◯ current · ● recommended default</figcaption>
-          </figure>
-
-          <div class="grand-total">
-            <span class="lbl">Total to serve: <b>inference</b> (right-sized) + <b>storage</b></span>
-            <span class="amt tnum"><span id="grand-total">$—</span><small id="grand-share"></small></span>
-          </div>
+  <!-- ====================== TOTAL ====================== -->
+  <section class="section" id="total" style="border-top:none">
+    <div class="wrap">
+      <div class="reveal">
+        <p class="eyebrow">The whole stack</p>
+        <h2 class="h-sec">Top to bottom, one number.</h2>
+        <p class="lead">Compute (right-sized), storage, and network, summed for the traffic you described above. Move any slider and watch the layer mix shift.</p>
+      </div>
+      <div class="total-band reveal">
+        <p class="eyebrow">Monthly cost to serve</p>
+        <div class="stackbar">
+          <div class="seg" id="seg-t-compute" style="background:var(--c-compute)"></div>
+          <div class="seg" id="seg-t-storage" style="background:var(--c-storage)"></div>
+          <div class="seg" id="seg-t-net" style="background:var(--c-net)"></div>
         </div>
+        <div class="legend">
+          <span><i class="swatch" style="background:var(--c-compute)"></i> Compute <b class="mono" id="leg-t-compute" style="margin-left:4px">—</b></span>
+          <span><i class="swatch" style="background:var(--c-storage)"></i> Storage <b class="mono" id="leg-t-storage" style="margin-left:4px">—</b></span>
+          <span><i class="swatch" style="background:var(--c-net)"></i> Network <b class="mono" id="leg-t-net" style="margin-left:4px">—</b></span>
+        </div>
+        <div class="tb-grand">
+          <span class="lbl">Total to serve <b>your traffic</b>, per month</span>
+          <span class="amt tnum" id="grand-total">$—</span>
+        </div>
+        <p class="tb-note">GPU costs (layer 02) aren't added on top — they're the supply-side decomposition of the compute line. Self-hosting swaps the compute number for your GPU fleet cost; everything else stays.</p>
       </div>
     </div>
   </section>
 
   <!-- ====================== FOOTER ====================== -->
-  <footer class="foot" id="data">
+  <footer class="foot">
     <div class="wrap">
       <div class="foot__top">
         <div>
@@ -504,17 +510,8 @@
           <p class="foot__tag">The price of intelligence, tracked.</p>
         </div>
         <div class="foot__cols">
-          <div>
-            <p class="foot__h">Research</p>
-            <a href="#briefings">Briefings</a>
-            <a href="#data">Data &amp; charts</a>
-            <a href="#storage">Storage costs</a>
-          </div>
-          <div>
-            <p class="foot__h">Tools</p>
-            <a href="#rightsize">Model right-sizing</a>
-            <a href="#storage">Storage estimator</a>
-          </div>
+          <div><p class="foot__h">Layers</p><a href="#compute">Compute &amp; model</a><a href="#gpu">GPU</a><a href="#storage">Storage</a><a href="#network">Network</a></div>
+          <div><p class="foot__h">Tools</p><a href="#compute">Model right-sizing</a><a href="#gpu">GPU → token cost</a><a href="#network">Egress estimator</a></div>
         </div>
       </div>
       <hr class="foot__rule" />
@@ -528,280 +525,255 @@
 
 <script>
 /* ============================================================
-   CONFIG  —  ILLUSTRATIVE. Swap in your live numbers here.
+   CONFIG — ILLUSTRATIVE. Swap in live numbers here.
    ============================================================ */
-const RATES = { object: 0.021, vector: 0.28 };   // $/GB-month
+const RATES = { object:0.021, vector:0.28, egress:0.09, xregion:0.02 }; // $/GB(-mo)
 
-// Model ladder: blended $ per million tokens, + a capability tier (1..5)
 const MODELS = [
-  { id:'small',     name:'Open · Small (8B)',  price:0.05, tier:1 },
-  { id:'open70b',   name:'Open · 70B',         price:0.09, tier:2 },
-  { id:'balanced',  name:'Balanced',           price:0.30, tier:3 },
-  { id:'frontier',  name:'Frontier',           price:0.90, tier:4 },
-  { id:'reasoning', name:'Frontier · Reason',  price:1.80, tier:5 },
+  { id:'small',     name:'Open · Small (8B)', price:0.05, tier:1 },
+  { id:'open70b',   name:'Open · 70B',        price:0.09, tier:2 },
+  { id:'balanced',  name:'Balanced',          price:0.30, tier:3 },
+  { id:'frontier',  name:'Frontier',          price:0.90, tier:4 },
+  { id:'reasoning', name:'Frontier · Reason', price:1.80, tier:5 },
 ];
-
-// Each traffic slice needs at least this capability tier
 const BUCKETS = [
   { id:'simple',   label:'Simple',   minTier:1 },
   { id:'moderate', label:'Moderate', minTier:2 },
   { id:'complex',  label:'Complex',  minTier:4 },
 ];
+const GPUS = [
+  { id:'l40s', name:'L40S',     price:1.10 },
+  { id:'a100', name:'A100 80G', price:1.80 },
+  { id:'h100', name:'H100 80G', price:2.90 },
+  { id:'h200', name:'H200',     price:3.70 },
+  { id:'b200', name:'B200',     price:5.50 },
+];
+const PAYLOADS = [
+  { id:'text',  name:'Text',  bytes:2_000 },
+  { id:'image', name:'Image', bytes:300_000 },
+  { id:'audio', name:'Audio', bytes:1_200_000 },
+  { id:'video', name:'Video', bytes:15_000_000 },
+];
 
-const cheapestFor = (minTier) =>
-  MODELS.filter(m => m.tier >= minTier).sort((a,b)=>a.price-b.price)[0];
-const modelById = (id) => MODELS.find(m => m.id === id);
+const cheapestFor = (t)=>MODELS.filter(m=>m.tier>=t).sort((a,b)=>a.price-b.price)[0];
+const modelById = (id)=>MODELS.find(m=>m.id===id);
 
 /* ---------- state ---------- */
 const state = {
-  weights:140, replicas:3, data:600, vector:80,        // storage
-  volume:2_000_000, tokens:1500,                        // traffic
-  mix:{ simple:45, moderate:40, complex:15 },
-  current:'frontier'
+  volume:2_000_000, tokens:1500, mix:{ simple:45, moderate:40, complex:15 }, current:'frontier',
+  gpu:{ type:'h100', tput:3000, util:40, fleet:8 },
+  weights:140, replicas:3, data:600, vector:80,
+  egress:{ payload:'text', xregionGB:200 }
 };
 
 /* ---------- formatting ---------- */
-const fmtMoney = (n) => {
-  if (n >= 1000) return '$' + Math.round(n).toLocaleString('en-US');
-  if (n >= 100)  return '$' + n.toFixed(0);
-  return '$' + n.toFixed(2);
-};
-const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
+const fmtMoney = (n)=> n>=1000 ? '$'+Math.round(n).toLocaleString('en-US')
+                    : n>=100  ? '$'+n.toFixed(0)
+                    : '$'+n.toFixed(2);
+const fmtInt = (n)=> Math.round(n).toLocaleString('en-US');
+const fmtGB  = (gb)=> gb>=1000 ? (gb/1000).toFixed(1)+' TB' : gb>=1 ? gb.toFixed(0)+' GB' : (gb*1000).toFixed(0)+' MB';
 
-/* ---------- volume slider is log-mapped (100k → 50M) ---------- */
-const VOL_MIN = 100_000, VOL_MAX = 50_000_000;
-const sliderToVolume = (t) => {
-  const v = VOL_MIN * Math.pow(VOL_MAX/VOL_MIN, t/100);
-  // round to a tidy step
-  const mag = Math.pow(10, Math.floor(Math.log10(v)));
-  return Math.round(v/(mag/2))*(mag/2);
-};
+/* volume slider is log-mapped (100k → 50M) */
+const VOL_MIN=100_000, VOL_MAX=50_000_000;
+const sliderToVolume = (t)=>{ const v=VOL_MIN*Math.pow(VOL_MAX/VOL_MIN,t/100);
+  const mag=Math.pow(10,Math.floor(Math.log10(v))); return Math.round(v/(mag/2))*(mag/2); };
 
 /* ============================================================
    COMPUTE
    ============================================================ */
 function computeStorage(){
-  const model  = state.weights * state.replicas * RATES.object;
-  const data   = state.data   * RATES.object;
-  const vector = state.vector * RATES.vector;
-  return { model, data, vector, total: model + data + vector };
+  const model=state.weights*state.replicas*RATES.object, data=state.data*RATES.object, vector=state.vector*RATES.vector;
+  return { model, data, vector, total:model+data+vector };
+}
+function computeInference(){
+  const raw=state.mix, sum=raw.simple+raw.moderate+raw.complex||1;
+  const share={ simple:raw.simple/sum, moderate:raw.moderate/sum, complex:raw.complex/sum };
+  const per=state.tokens/1e6, cur=modelById(state.current);
+  const currentMonthly=state.volume*per*cur.price;
+  const rows=BUCKETS.map(b=>{ const m=cheapestFor(b.minTier); const vol=state.volume*share[b.id]; return { bucket:b, share:share[b.id], model:m, cost:vol*per*m.price }; });
+  const rightMonthly=rows.reduce((a,r)=>a+r.cost,0);
+  const byModel={}; rows.forEach(r=>byModel[r.model.id]=(byModel[r.model.id]||0)+r.share);
+  const defaultId=Object.keys(byModel).sort((a,b)=>byModel[b]-byModel[a])[0];
+  const savings=currentMonthly-rightMonthly;
+  return { share, currentMonthly, rightMonthly, rows, defaultModel:modelById(defaultId),
+           savings, savingsPct:currentMonthly>0?savings/currentMonthly:0, cur };
+}
+function computeGpu(){
+  const g=GPUS.find(x=>x.id===state.gpu.type);
+  const tokPerHr=state.gpu.tput*3600*(state.gpu.util/100);
+  const perMtok=tokPerHr>0 ? (g.price/tokPerHr)*1e6 : 0;
+  const fleetCost=g.price*730*state.gpu.fleet;
+  const monthlyTokens=state.gpu.fleet*state.gpu.tput*3600*730*(state.gpu.util/100); // tokens/mo
+  const targetPerToken=0.30/1e6;
+  const breakeven=g.price/(state.gpu.tput*3600*targetPerToken); // fraction
+  return { g, perMtok, fleetCost, monthlyTokens, breakeven };
+}
+function computeEgress(){
+  const p=PAYLOADS.find(x=>x.id===state.egress.payload);
+  const streamGB=state.volume*p.bytes/1e9;
+  const cost=streamGB*RATES.egress + state.egress.xregionGB*RATES.xregion;
+  return { p, streamGB, xregionGB:state.egress.xregionGB, cost };
+}
+function computeStack(){
+  const compute=computeInference().rightMonthly, storage=computeStorage().total, net=computeEgress().cost;
+  return { compute, storage, net, total:compute+storage+net };
 }
 
-function computeInference(){
-  const raw = state.mix;
-  const sum = raw.simple + raw.moderate + raw.complex || 1;
-  const share = {
-    simple:   raw.simple   / sum,
-    moderate: raw.moderate / sum,
-    complex:  raw.complex  / sum
-  };
-  const perPrompt = state.tokens / 1e6;               // Mtok per prompt
-  const cur = modelById(state.current);
-  const currentMonthly = state.volume * perPrompt * cur.price;
-
-  // route each slice to the cheapest capable model
-  const rows = BUCKETS.map(b => {
-    const m = cheapestFor(b.minTier);
-    const vol = state.volume * share[b.id];
-    const cost = vol * perPrompt * m.price;
-    return { bucket:b, share:share[b.id], model:m, cost };
+/* ============================================================
+   RENDER HELPERS
+   ============================================================ */
+function setFill(el){ const min=+el.min,max=+el.max,val=+el.value; el.style.setProperty('--fill',((val-min)/(max-min)*100)+'%'); }
+let animRAF=null;
+function animateMoney(el,to){
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){ el.textContent=fmtMoney(to); return; }
+  cancelAnimationFrame(animRAF);
+  const from=parseFloat(el.dataset.cur||'0'), start=performance.now(), dur=420;
+  const step=(now)=>{ const p=Math.min(1,(now-start)/dur), e=1-Math.pow(1-p,3);
+    el.textContent=fmtMoney(from+(to-from)*e); if(p<1) animRAF=requestAnimationFrame(step); else el.dataset.cur=to; };
+  animRAF=requestAnimationFrame(step);
+}
+function renderFrontier(currentId, defaultId){
+  const svg=document.getElementById('frontier-svg');
+  const W=520,H=200,padL=26,padR=22,padT=20,padB=30;
+  const xs=MODELS.map((_,i)=>padL+i*((W-padL-padR)/(MODELS.length-1)));
+  const pMin=Math.log(0.04),pMax=Math.log(2.0);
+  const y=(price)=>padT+(1-(Math.log(price)-pMin)/(pMax-pMin))*(H-padT-padB);
+  const pts=MODELS.map((m,i)=>`${xs[i].toFixed(1)},${y(m.price).toFixed(1)}`).join(' ');
+  let s=`<polyline points="${pts}" style="fill:none;stroke:var(--rule-2);stroke-width:1.5"/>`;
+  MODELS.forEach((m,i)=>{ const cx=xs[i].toFixed(1), cy=y(m.price).toFixed(1);
+    const isCur=m.id===currentId, isDef=m.id===defaultId;
+    if(isCur) s+=`<circle cx="${cx}" cy="${cy}" r="11" style="fill:none;stroke:var(--neg);stroke-width:2"/>`;
+    s+=`<circle cx="${cx}" cy="${cy}" r="5.5" style="fill:${isDef?'var(--accent)':'var(--surface)'};stroke:${isDef?'var(--accent)':'var(--muted)'};stroke-width:2"/>`;
+    s+=`<text x="${cx}" y="${H-12}" text-anchor="middle" font-size="9" style="font-family:var(--mono);fill:var(--faint)">${m.name.split('·')[0].trim()}</text>`;
+    s+=`<text x="${cx}" y="${(y(m.price)-15).toFixed(1)}" text-anchor="middle" font-size="9" style="font-family:var(--mono);fill:${isDef?'var(--accent)':'var(--faint)'}">$${m.price.toFixed(2)}</text>`;
   });
-  const rightMonthly = rows.reduce((a,r)=>a+r.cost, 0);
-
-  // which model carries the largest share of routed volume = the default
-  const byModel = {};
-  rows.forEach(r => { byModel[r.model.id] = (byModel[r.model.id]||0) + r.share; });
-  const defaultId = Object.keys(byModel).sort((a,b)=>byModel[b]-byModel[a])[0];
-  const defaultModel = modelById(defaultId);
-  const defaultShare = byModel[defaultId];
-
-  const savings = currentMonthly - rightMonthly;
-  const savingsPct = currentMonthly > 0 ? savings/currentMonthly : 0;
-
-  return { share, currentMonthly, rightMonthly, rows, defaultModel,
-           defaultShare, savings, savingsPct, cur };
+  svg.innerHTML=s;
 }
 
 /* ============================================================
    RENDER
    ============================================================ */
-function setFill(el){
-  const min = +el.min, max = +el.max, val = +el.value;
-  el.style.setProperty('--fill', ((val-min)/(max-min)*100) + '%');
-}
-
-let animRAF = null;
-function animateMoney(el, to){
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches){
-    el.textContent = fmtMoney(to); return;
-  }
-  cancelAnimationFrame(animRAF);
-  const from = parseFloat((el.dataset.cur||'0')); const start = performance.now(); const dur = 420;
-  const step = (now)=>{
-    const p = Math.min(1,(now-start)/dur);
-    const e = 1-Math.pow(1-p,3);
-    const v = from + (to-from)*e;
-    el.textContent = fmtMoney(v);
-    if (p<1) animRAF = requestAnimationFrame(step); else el.dataset.cur = to;
-  };
-  animRAF = requestAnimationFrame(step);
-}
-
-function renderFrontier(currentId, defaultId){
-  const svg = document.getElementById('frontier-svg');
-  const W=520,H=200, padL=26,padR=22,padT=20,padB=30;
-  const xs = MODELS.map((_,i)=> padL + i*((W-padL-padR)/(MODELS.length-1)));
-  const pMin=Math.log(0.04), pMax=Math.log(2.0);
-  const y = (price)=> padT + (1-(Math.log(price)-pMin)/(pMax-pMin))*(H-padT-padB);
-  const pts = MODELS.map((m,i)=>`${xs[i].toFixed(1)},${y(m.price).toFixed(1)}`).join(' ');
-  let s = `<polyline points="${pts}" style="fill:none;stroke:var(--rule-2);stroke-width:1.5"/>`;
-  MODELS.forEach((m,i)=>{
-    const cx=xs[i].toFixed(1), cy=y(m.price).toFixed(1);
-    const isCur = m.id===currentId, isDef = m.id===defaultId;
-    if (isCur) s += `<circle cx="${cx}" cy="${cy}" r="11" style="fill:none;stroke:var(--neg);stroke-width:2"/>`;
-    s += `<circle cx="${cx}" cy="${cy}" r="5.5" style="fill:${isDef?'var(--accent)':'var(--surface)'};stroke:${isDef?'var(--accent)':'var(--muted)'};stroke-width:2"/>`;
-    s += `<text x="${cx}" y="${H-12}" text-anchor="middle" font-size="9" style="font-family:var(--mono);fill:var(--faint)">${m.name.split('·')[0].trim()}</text>`;
-    s += `<text x="${cx}" y="${(y(m.price)-15).toFixed(1)}" text-anchor="middle" font-size="9" style="font-family:var(--mono);fill:${isDef?'var(--accent)':'var(--faint)'}">$${m.price.toFixed(2)}</text>`;
-  });
-  svg.innerHTML = s;
-}
-
 function render(){
-  /* sliders fill */
   document.querySelectorAll('input[type=range]').forEach(setFill);
 
-  /* ---- storage ---- */
-  const st = computeStorage();
-  document.getElementById('v-weights').textContent  = state.weights + ' GB';
-  document.getElementById('v-replicas').textContent = '×' + state.replicas;
-  document.getElementById('v-data').textContent     = fmtInt(state.data) + ' GB';
-  document.getElementById('v-vector').textContent   = fmtInt(state.vector) + ' GB';
+  /* ---- 01 compute ---- */
+  document.getElementById('v-volume').textContent=fmtInt(state.volume);
+  document.getElementById('v-tokens').textContent=fmtInt(state.tokens);
+  const msum=state.mix.simple+state.mix.moderate+state.mix.complex||1;
+  document.getElementById('v-simple').textContent=Math.round(state.mix.simple/msum*100)+'%';
+  document.getElementById('v-moderate').textContent=Math.round(state.mix.moderate/msum*100)+'%';
+  document.getElementById('v-complex').textContent=Math.round(state.mix.complex/msum*100)+'%';
 
-  const stTot = st.total || 1;
-  document.getElementById('seg-model').style.width  = (st.model/stTot*100)+'%';
-  document.getElementById('seg-data').style.width   = (st.data/stTot*100)+'%';
-  document.getElementById('seg-vector').style.width = (st.vector/stTot*100)+'%';
-  document.getElementById('leg-model').textContent  = fmtMoney(st.model);
-  document.getElementById('leg-data').textContent   = fmtMoney(st.data);
-  document.getElementById('leg-vector').textContent = fmtMoney(st.vector);
-  document.getElementById('storage-total').textContent = fmtMoney(st.total) + ' /mo';
+  const inf=computeInference();
+  document.getElementById('r-current').textContent=fmtMoney(inf.currentMonthly);
+  document.getElementById('r-right').textContent=fmtMoney(inf.rightMonthly);
+  document.getElementById('r-save').textContent = inf.savings>0.5 ? fmtMoney(inf.savings)+' · '+Math.round(inf.savingsPct*100)+'%' : 'already lean';
 
-  /* ---- inference / right-sizing ---- */
-  document.getElementById('v-volume').textContent = fmtInt(state.volume);
-  document.getElementById('v-tokens').textContent = fmtInt(state.tokens);
-  const sum = state.mix.simple + state.mix.moderate + state.mix.complex || 1;
-  document.getElementById('v-simple').textContent   = Math.round(state.mix.simple/sum*100)+'%';
-  document.getElementById('v-moderate').textContent = Math.round(state.mix.moderate/sum*100)+'%';
-  document.getElementById('v-complex').textContent  = Math.round(state.mix.complex/sum*100)+'%';
-
-  const inf = computeInference();
-  document.getElementById('r-current').textContent = fmtMoney(inf.currentMonthly);
-  document.getElementById('r-right').textContent   = fmtMoney(inf.rightMonthly);
-  const saveEl = document.getElementById('r-save');
-  if (inf.savings > 0.5){
-    saveEl.textContent = fmtMoney(inf.savings) + ' · ' + Math.round(inf.savingsPct*100) + '%';
-  } else {
-    saveEl.textContent = 'already lean';
-  }
-
-  /* routing table */
-  const body = document.getElementById('rt-body');
-  body.innerHTML = inf.rows.map(r => {
-    const isDef = r.model.id === inf.defaultModel.id;
-    return `<tr>
-      <td>${r.bucket.label}</td>
-      <td class="model">${r.model.name}${isDef?'<span class="pill pill--def">default</span>':''}</td>
-      <td class="r tnum">${Math.round(r.share*100)}%</td>
-      <td class="r tnum">${fmtMoney(r.cost)}</td>
-    </tr>`;
+  document.getElementById('rt-body').innerHTML = inf.rows.map(r=>{
+    const isDef=r.model.id===inf.defaultModel.id;
+    return `<tr><td>${r.bucket.label}</td><td class="model">${r.model.name}${isDef?'<span class="pill pill--def">default</span>':''}</td><td class="r tnum">${Math.round(r.share*100)}%</td><td class="r tnum">${fmtMoney(r.cost)}</td></tr>`;
   }).join('');
 
-  /* verdict copy */
-  const v  = document.getElementById('verdict');
-  const vt = document.getElementById('verdict-tag');
-  const vx = document.getElementById('verdict-txt');
-  const curName = inf.cur.name;
-  const pct = Math.round(inf.savingsPct*100);
-  const money = (n)=>fmtMoney(n);
-
-  // share of prompts whose right-sized model is cheaper than the current one
-  const cheaperRows  = inf.rows.filter(r => r.model.price < inf.cur.price);
-  const cheaperShare = cheaperRows.reduce((a,r)=>a+r.share,0);
-  const cheaperPct   = Math.round(cheaperShare*100);
-  let leadName = curName;
-  if (cheaperRows.length){
-    const byM = {}; cheaperRows.forEach(r => byM[r.model.id]=(byM[r.model.id]||0)+r.share);
-    const topId = Object.keys(byM).sort((a,b)=>byM[b]-byM[a])[0];
-    leadName = modelById(topId).name;
-  }
-
+  const v=document.getElementById('verdict'), vt=document.getElementById('verdict-tag'), vx=document.getElementById('verdict-txt');
+  const curName=inf.cur.name, pct=Math.round(inf.savingsPct*100);
+  const cheaperRows=inf.rows.filter(r=>r.model.price<inf.cur.price);
+  const cheaperShare=cheaperRows.reduce((a,r)=>a+r.share,0), cheaperPct=Math.round(cheaperShare*100);
+  let leadName=curName;
+  if(cheaperRows.length){ const byM={}; cheaperRows.forEach(r=>byM[r.model.id]=(byM[r.model.id]||0)+r.share);
+    leadName=modelById(Object.keys(byM).sort((a,b)=>byM[b]-byM[a])[0]).name; }
   v.classList.remove('is-over');
-  if (inf.savings < -0.5){
-    v.classList.add('is-over'); vt.textContent = 'Quality risk';
-    vx.innerHTML = `Careful — <b>${curName}</b> sits below the tier your complex slice needs. `
-      + `Matching quality there means routing those prompts to a stronger model, which would `
-      + `<b>raise</b> the bill to about <b>${money(inf.rightMonthly)}</b>/mo. Here the cheap default is costing accuracy, not dollars.`;
-  } else if (cheaperShare >= 0.5 && inf.savings > 0.5){
-    vt.textContent = 'Cut your bill';
-    vx.innerHTML = `Yes — most of your traffic (<b>~${cheaperPct}%</b>) doesn't need <b>${curName}</b>. `
-      + `Route the simple and moderate prompts to cheaper models (mostly <b>${leadName}</b>) and keep `
-      + `${curName} for the rest: blended cost falls from <b>${money(inf.currentMonthly)}</b> to `
-      + `<b>${money(inf.rightMonthly)}</b> a month — <b>${pct}% less</b>.`;
-  } else if (inf.savings > 0.5){
-    vt.textContent = 'Room to trim';
-    vx.innerHTML = `About <b>${cheaperPct}%</b> of prompts can move to cheaper models, taking you from `
-      + `<b>${money(inf.currentMonthly)}</b> to <b>${money(inf.rightMonthly)}</b> a month — a <b>${pct}%</b> saving — `
-      + `without touching the hard prompts.`;
-  } else {
-    vt.textContent = 'Well matched';
-    vx.innerHTML = `Your current choice already sits near the efficient frontier for this mix. `
-      + `A cheaper default would start dropping quality on the prompts you actually have.`;
-  }
-
+  if(inf.savings<-0.5){ v.classList.add('is-over'); vt.textContent='Quality risk';
+    vx.innerHTML=`Careful — <b>${curName}</b> sits below the tier your complex slice needs. Matching quality there means routing those prompts to a stronger model, which would <b>raise</b> the bill to about <b>${fmtMoney(inf.rightMonthly)}</b>/mo. Here the cheap default is costing accuracy, not dollars.`;
+  } else if(cheaperShare>=0.5 && inf.savings>0.5){ vt.textContent='Cut your bill';
+    vx.innerHTML=`Yes — most of your traffic (<b>~${cheaperPct}%</b>) doesn't need <b>${curName}</b>. Route the simple and moderate prompts to cheaper models (mostly <b>${leadName}</b>) and keep ${curName} for the rest: blended cost falls from <b>${fmtMoney(inf.currentMonthly)}</b> to <b>${fmtMoney(inf.rightMonthly)}</b> a month — <b>${pct}% less</b>.`;
+  } else if(inf.savings>0.5){ vt.textContent='Room to trim';
+    vx.innerHTML=`About <b>${cheaperPct}%</b> of prompts can move to cheaper models, taking you from <b>${fmtMoney(inf.currentMonthly)}</b> to <b>${fmtMoney(inf.rightMonthly)}</b> a month — a <b>${pct}%</b> saving — without touching the hard prompts.`;
+  } else { vt.textContent='Well matched';
+    vx.innerHTML=`Your current choice already sits near the efficient frontier for this mix. A cheaper default would start dropping quality on the prompts you actually have.`; }
   renderFrontier(state.current, inf.defaultModel.id);
 
-  /* grand total = right-sized inference + storage */
-  const grand = inf.rightMonthly + st.total;
-  animateMoney(document.getElementById('grand-total'), grand);
-  const sharePct = grand>0 ? Math.round(st.total/grand*100) : 0;
-  document.getElementById('grand-share').textContent = ' · storage ' + sharePct + '%';
+  /* ---- 02 gpu ---- */
+  document.getElementById('v-tput').textContent=fmtInt(state.gpu.tput)+' tok/s';
+  document.getElementById('v-util').textContent=state.gpu.util+'%';
+  document.getElementById('v-fleet').textContent='×'+state.gpu.fleet;
+  const gpu=computeGpu();
+  document.getElementById('gpu-permtok').textContent=fmtMoney(gpu.perMtok);
+  document.getElementById('gpu-fleet-cost').textContent=fmtMoney(gpu.fleetCost);
+  document.getElementById('gpu-capacity').textContent=fmtInt(gpu.monthlyTokens/1e6)+' Mtok';
+  document.getElementById('gpu-breakeven').textContent = gpu.breakeven>1 ? '>100%' : Math.round(gpu.breakeven*100)+'%';
+
+  /* ---- 03 storage ---- */
+  document.getElementById('v-weights').textContent=state.weights+' GB';
+  document.getElementById('v-replicas').textContent='×'+state.replicas;
+  document.getElementById('v-data').textContent=fmtInt(state.data)+' GB';
+  document.getElementById('v-vector').textContent=fmtInt(state.vector)+' GB';
+  const st=computeStorage(), stTot=st.total||1;
+  document.getElementById('seg-s-model').style.width=(st.model/stTot*100)+'%';
+  document.getElementById('seg-s-data').style.width=(st.data/stTot*100)+'%';
+  document.getElementById('seg-s-vector').style.width=(st.vector/stTot*100)+'%';
+  document.getElementById('leg-s-model').textContent=fmtMoney(st.model);
+  document.getElementById('leg-s-data').textContent=fmtMoney(st.data);
+  document.getElementById('leg-s-vector').textContent=fmtMoney(st.vector);
+  document.getElementById('storage-total').textContent=fmtMoney(st.total)+' /mo';
+
+  /* ---- 04 network ---- */
+  document.getElementById('v-net-vol').textContent=fmtInt(state.volume);
+  document.getElementById('v-xregion').textContent=fmtInt(state.egress.xregionGB)+' GB';
+  const eg=computeEgress();
+  document.getElementById('net-cost').textContent=fmtMoney(eg.cost);
+  document.getElementById('net-gb').textContent=fmtGB(eg.streamGB);
+  document.getElementById('net-xgb').textContent=fmtGB(eg.xregionGB);
+
+  /* ---- total stack ---- */
+  const stack=computeStack(), tot=stack.total||1;
+  document.getElementById('seg-t-compute').style.width=(stack.compute/tot*100)+'%';
+  document.getElementById('seg-t-storage').style.width=(stack.storage/tot*100)+'%';
+  document.getElementById('seg-t-net').style.width=(stack.net/tot*100)+'%';
+  document.getElementById('leg-t-compute').textContent=fmtMoney(stack.compute);
+  document.getElementById('leg-t-storage').textContent=fmtMoney(stack.storage);
+  document.getElementById('leg-t-net').textContent=fmtMoney(stack.net);
+  animateMoney(document.getElementById('grand-total'), stack.total);
+
+  // egress share of bill (card)
+  const sharePct = stack.total>0 ? Math.round(stack.net/stack.total*100) : 0;
+  document.getElementById('net-share').textContent=sharePct+'%';
+  document.getElementById('net-share-note').textContent = sharePct>=25 ? '▲ media-heavy workload' : '▪ light for text';
 }
 
 /* ============================================================
    WIRING
    ============================================================ */
-function bind(id, fn){
-  const el = document.getElementById(id);
-  el.addEventListener('input', () => { fn(el); render(); });
-}
-bind('s-weights',  e => state.weights  = +e.value);
-bind('s-replicas', e => state.replicas = +e.value);
-bind('s-data',     e => state.data     = +e.value);
-bind('s-vector',   e => state.vector   = +e.value);
-bind('s-volume',   e => state.volume   = sliderToVolume(+e.value));
-bind('s-tokens',   e => state.tokens   = +e.value);
-bind('s-simple',   e => state.mix.simple   = +e.value);
-bind('s-moderate', e => state.mix.moderate = +e.value);
-bind('s-complex',  e => state.mix.complex  = +e.value);
+function bind(id,fn){ const el=document.getElementById(id); el.addEventListener('input',()=>{ fn(el); render(); }); }
+bind('s-volume',  e=>state.volume=sliderToVolume(+e.value));
+bind('s-tokens',  e=>state.tokens=+e.value);
+bind('s-simple',  e=>state.mix.simple=+e.value);
+bind('s-moderate',e=>state.mix.moderate=+e.value);
+bind('s-complex', e=>state.mix.complex=+e.value);
+bind('s-tput',    e=>state.gpu.tput=+e.value);
+bind('s-util',    e=>state.gpu.util=+e.value);
+bind('s-fleet',   e=>state.gpu.fleet=+e.value);
+bind('s-weights', e=>state.weights=+e.value);
+bind('s-replicas',e=>state.replicas=+e.value);
+bind('s-data',    e=>state.data=+e.value);
+bind('s-vector',  e=>state.vector=+e.value);
+bind('s-xregion', e=>state.egress.xregionGB=+e.value);
 
-/* current-model segmented control */
-const grp = document.getElementById('model-group');
-grp.innerHTML = MODELS.map(m =>
-  `<button class="seg-btn" role="button" aria-pressed="${m.id===state.current}"
-           data-id="${m.id}">${m.name}</button>`).join('');
-grp.addEventListener('click', e => {
-  const b = e.target.closest('.seg-btn'); if(!b) return;
-  state.current = b.dataset.id;
-  grp.querySelectorAll('.seg-btn').forEach(x =>
-    x.setAttribute('aria-pressed', x.dataset.id===state.current));
-  render();
-});
+/* segmented controls */
+function segGroup(elId, items, getActive, onPick){
+  const grp=document.getElementById(elId);
+  grp.innerHTML=items.map(it=>`<button class="seg-btn" data-id="${it.id}" aria-pressed="${it.id===getActive()}">${it.name}${it.price?` · $${it.price.toFixed(2)}`:''}</button>`).join('');
+  grp.addEventListener('click',e=>{ const b=e.target.closest('.seg-btn'); if(!b) return;
+    onPick(b.dataset.id);
+    grp.querySelectorAll('.seg-btn').forEach(x=>x.setAttribute('aria-pressed', x.dataset.id===getActive()));
+    render(); });
+}
+segGroup('model-group',  MODELS,   ()=>state.current,      id=>state.current=id);
+segGroup('gpu-group',    GPUS,     ()=>state.gpu.type,     id=>state.gpu.type=id);
+segGroup('payload-group',PAYLOADS, ()=>state.egress.payload,id=>state.egress.payload=id);
 
 /* scroll reveal */
-const io = new IntersectionObserver((entries)=>{
-  entries.forEach(en => { if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target);} });
-}, { threshold:.12 });
-document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+const io=new IntersectionObserver((es)=>{ es.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target);} }); }, { threshold:.1 });
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 
 render();
 </script>
