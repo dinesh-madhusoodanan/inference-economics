@@ -10,8 +10,9 @@ export function Header() {
           <a href="#storage">STORAGE</a>
           <a href="#network">NETWORK</a>
           <a href="#total">TOTAL</a>
+          <a href="#savings" className="nav__act">SAVINGS</a>
         </nav>
-        <button className="btn" type="button" onClick={go('compute')}>Open the model →</button>
+        <button className="btn" type="button" onClick={go('savings')}>Cut the bill →</button>
       </div>
     </header>
   );

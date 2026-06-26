@@ -1,0 +1,82 @@
+/* Savings act (sections 05–09). Reuses shared component classes;
+   only the genuinely new chrome lives here. */
+
+/* intro index: five columns instead of the stack's four */
+.savings-intro .layer-index { grid-template-columns:repeat(5,1fr); }
+@media (max-width:880px){ .savings-intro .layer-index { grid-template-columns:1fr 1fr; } }
+
+/* live / sample badge in panel bars */
+.src-badge {
+  display:inline-flex; align-items:center; gap:7px;
+  font-family:var(--mono); font-size:11px; letter-spacing:.04em; color:var(--faint);
+}
+.src-dot { width:7px; height:7px; border-radius:50%; background:var(--faint); }
+.src-badge--live { color:var(--pos); }
+.src-badge--live .src-dot { background:var(--pos); box-shadow:0 0 0 3px var(--pos-bg); }
+
+/* full-width panel body + a controls row */
+.panel__body { padding:24px; }
+.panel-controls {
+  display:flex; align-items:center; justify-content:space-between; gap:18px;
+  flex-wrap:wrap; margin-bottom:22px;
+}
+.panel-controls .mini-grid { flex:1; min-width:280px; }
+
+/* attribution: agent rows */
+.agent-list { display:flex; flex-direction:column; }
+.agent-row {
+  display:grid; grid-template-columns:180px 1fr 130px; align-items:center; gap:18px;
+  padding:13px 0; border-bottom:1px dotted var(--rule);
+}
+.agent-row:last-child { border-bottom:none; }
+.agent-row__name { font-family:var(--mono); font-size:13px; color:var(--ink); display:block; }
+.agent-row__sub { font-family:var(--mono); font-size:11px; color:var(--faint); }
+.agent-row__bar .stackbar { height:22px; margin:0; }
+.agent-row__amt { text-align:right; }
+.agent-row__amt .tnum { font-family:var(--serif); font-size:19px; }
+.agent-row__amt small { display:block; font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-top:2px; }
+@media (max-width:680px){ .agent-row { grid-template-columns:1fr; gap:8px; } .agent-row__amt { text-align:left; } }
+
+/* validated / pending chips */
+.q-chip {
+  margin-left:8px; font-family:var(--mono); font-size:9.5px; letter-spacing:.06em;
+  text-transform:uppercase; padding:2px 6px; border-radius:3px; vertical-align:middle;
+}
+.q-chip--ok { background:var(--pos-bg); color:var(--pos); }
+.q-chip--wait { background:#F1EEE6; color:var(--faint); }
+
+/* performance scatter */
+.bar-pick { display:flex; flex-direction:column; gap:8px; }
+.frontier-plot { width:100%; height:auto; display:block; margin-top:8px; }
+.frontier-plot .axis { stroke:var(--rule-2); stroke-width:1; }
+.frontier-plot .bar-line { stroke:var(--accent); stroke-width:1; stroke-dasharray:4 4; opacity:.6; }
+.frontier-plot .plot-lab { font-family:var(--mono); font-size:10px; fill:var(--faint); }
+.frontier-plot .plot-lab.r { text-anchor:end; }
+.frontier-plot .dot { stroke:var(--surface); stroke-width:1.5; }
+.frontier-plot .dot--base { fill:var(--ink); }
+.frontier-plot .dot--ok { fill:var(--pos); }
+.frontier-plot .dot--risk { fill:var(--neg); }
+
+/* routing: deployment pill + config block */
+.dep-pill {
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.03em; padding:3px 8px;
+  border-radius:3px; color:var(--dep,var(--muted));
+  background:color-mix(in srgb, var(--dep,var(--muted)) 12%, var(--surface));
+  border:1px solid color-mix(in srgb, var(--dep,var(--muted)) 28%, var(--surface));
+}
+.codeblock__lab {
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--faint); margin:22px 0 8px;
+}
+.codeblock {
+  background:#161A1B; color:#D7E0DE; border-radius:7px; padding:18px 20px; overflow:auto;
+  font-family:var(--mono); font-size:12px; line-height:1.55; margin:0; max-height:360px;
+}
+.codeblock code { color:inherit; }
+
+/* offload: fast break-even highlight */
+.be-fast { color:var(--pos); font-weight:600; }
+
+/* header: emphasise the savings act link */
+.nav__act { color:var(--accent); }
+.nav__act:hover { color:var(--accent-ink); border-color:var(--accent); }
