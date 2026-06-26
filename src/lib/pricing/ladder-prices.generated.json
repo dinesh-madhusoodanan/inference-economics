@@ -1,0 +1,22 @@
+{
+  "small": {
+    "model": "gemini-2.0-flash",
+    "priceMtok": 0.25
+  },
+  "open70b": {
+    "model": "gpt-4o-mini",
+    "priceMtok": 0.375
+  },
+  "balanced": {
+    "model": "gemini-2.5-flash",
+    "priceMtok": 1.4
+  },
+  "frontier": {
+    "model": "gpt-4o",
+    "priceMtok": 6.25
+  },
+  "reasoning": {
+    "model": "claude-3-7-sonnet-20250219",
+    "priceMtok": 9
+  }
+}

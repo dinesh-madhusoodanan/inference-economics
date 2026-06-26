@@ -1,0 +1,19 @@
+# netlify.toml — build + functions config for the Vite + React app
+
+[build]
+  command = "npm run build"    # runs: tsc --noEmit && vite build
+  publish = "dist"             # Vite's output folder
+
+[build.environment]
+  NODE_VERSION = "20"          # Vite 5 needs Node 18+
+
+# Scheduled poller lives here: netlify/functions/poll-source-repo.mts
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Vite fingerprints asset filenames, so they're safe to cache forever.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

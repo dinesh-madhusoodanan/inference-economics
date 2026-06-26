@@ -1,0 +1,6 @@
+/* 02 · GPU — the derivation formula strip. */
+.formula {
+  font-family:var(--mono); font-size:12px; color:var(--muted); background:var(--paper);
+  border:1px solid var(--rule); border-radius:5px; padding:11px 13px; margin:4px 0 18px; line-height:1.5;
+}
+.formula b { color:var(--accent); }

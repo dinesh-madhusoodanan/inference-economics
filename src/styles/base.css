@@ -1,0 +1,21 @@
+/* Reset, document defaults, layout container, utilities, reveal. */
+*,*::before,*::after { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+@media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+
+body {
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--sans); font-size:16px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+a { color:inherit; text-decoration:none; }
+::selection { background:var(--accent); color:var(--paper); }
+:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; }
+
+.wrap { max-width:var(--maxw); margin:0 auto; padding:0 28px; }
+.mono { font-family:var(--mono); }
+.tnum { font-variant-numeric:tabular-nums; }
+
+.reveal { opacity:0; transform:translateY(16px); transition:opacity .7s ease, transform .7s ease; }
+.reveal.in { opacity:1; transform:none; }
+@media (prefers-reduced-motion:reduce) { .reveal { opacity:1; transform:none; transition:none; } }

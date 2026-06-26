@@ -1,0 +1,15 @@
+/* 03 · Storage — the model-vs-data split + definition lists. */
+.split {
+  display:grid; grid-template-columns:1fr 1fr; gap:1px;
+  background:var(--rule); border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin-top:1px;
+}
+.split__col { background:var(--surface); padding:30px 26px; }
+.split__h { font-family:var(--serif); font-size:21px; margin:0 0 4px; letter-spacing:-.01em; }
+.split__tag { font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin:0 0 14px; }
+.split__p { font-size:14.5px; color:var(--muted); margin:0 0 16px; }
+.ll { list-style:none; margin:0; padding:0; font-size:14px; }
+.ll li { display:flex; justify-content:space-between; gap:18px; padding:9px 0; border-top:1px dotted var(--rule-2); }
+.ll li:first-child { border-top:none; }
+.ll .term small { display:block; color:var(--faint); font-size:12px; font-family:var(--mono); }
+.ll .num { font-family:var(--mono); color:var(--muted); white-space:nowrap; }
+@media (max-width:760px) { .split { grid-template-columns:1fr; } }

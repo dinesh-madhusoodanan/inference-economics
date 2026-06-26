@@ -1,0 +1,14 @@
+/* Design tokens — editorial / financial-research palette. */
+:root {
+  --paper:#F6F4EF; --surface:#FCFBF8;
+  --ink:#17150F; --muted:#6E6A60; --faint:#9A958B;
+  --rule:#E5E1D7; --rule-2:#D8D3C7;
+  --accent:#0E5A66; --accent-ink:#0A434C;
+  --pos:#2E7D52; --neg:#B23A3A; --pos-bg:#E7F1EA; --neg-bg:#F6E7E5;
+  --c-compute:#0E5A66; --c-gpu:#9C6B2E; --c-storage:#7FA9A0; --c-net:#5B6B8C;
+  --shadow:0 1px 2px rgba(23,21,15,.04), 0 8px 24px -16px rgba(23,21,15,.18);
+  --serif:'Newsreader', Georgia, serif;
+  --sans:'Inter', system-ui, -apple-system, sans-serif;
+  --mono:'IBM Plex Mono', ui-monospace, monospace;
+  --maxw:1180px;
+}
